@@ -4,11 +4,14 @@
   let selectedDraftId = "";
   let selectedMapPoint = null;
   let currentEditTaskId = "";
+  let masterSession = app.getMasterSession();
   let map;
   let mapMarker;
 
   const navButtons = document.querySelectorAll("[data-page-target]");
   const sections = document.querySelectorAll(".page-section");
+  const masterLoginScreen = document.getElementById("master-login-screen");
+  const masterAppShell = document.getElementById("master-app-shell");
 
   const masterForm = document.getElementById("master-filter-form");
   const assignmentForm = document.getElementById("task-assignment-form");
@@ -35,11 +38,23 @@
   const assignLongitude = document.getElementById("assignLongitude");
   const assignInstructions = document.getElementById("assignInstructions");
 
+  function showMasterApp() {
+    masterLoginScreen.classList.add("hidden");
+    masterAppShell.classList.remove("hidden");
+    document.getElementById("logged-in-master").textContent = masterSession?.name || masterSession?.userId || "Master";
+  }
+
+  function showMasterLogin() {
+    masterLoginScreen.classList.remove("hidden");
+    masterAppShell.classList.add("hidden");
+  }
+
   function saveState(action, payload) {
     app.writeState(state);
     app.postGoogleSync(state, {
       app: "Bliss TaskPro",
       source: "master",
+      userId: masterSession?.userId || "",
       action,
       payload,
       state
@@ -250,7 +265,7 @@
       return;
     }
 
-    const remote = await app.fetchGoogleTask(state.settings, task.siteId);
+    const remote = await app.fetchGoogleTask(state.settings.engineer, task.siteId);
     const remoteDocuments = remote?.documents || [];
     const remotePhotos = remote?.photos || [];
 
@@ -389,10 +404,10 @@
 
   function refreshAll() {
     state = app.readState();
-    googleScriptInput.value = state.settings.googleScriptUrl || "";
-    googleSheetInput.value = state.settings.googleSheetId || "";
-    googleDocumentDriveInput.value = state.settings.googleDocumentFolderId || "";
-    googlePhotoDriveInput.value = state.settings.googlePhotoFolderId || "";
+    googleScriptInput.value = state.settings.master.googleScriptUrl || "";
+    googleSheetInput.value = state.settings.master.googleSheetId || "";
+    googleDocumentDriveInput.value = state.settings.master.googleDocumentFolderId || "";
+    googlePhotoDriveInput.value = state.settings.master.googlePhotoFolderId || "";
     setOptions();
     toggleOtherField(clientMaster, clientMasterOther, "clientMasterOtherWrap", "client");
     toggleOtherField(engineerMaster, engineerMasterOther, "engineerMasterOtherWrap", "engineer");
@@ -618,16 +633,40 @@
     closeMap();
   });
   document.getElementById("open-settings-modal").addEventListener("click", openSettings);
+  document.getElementById("master-login-settings").addEventListener("click", openSettings);
   document.getElementById("close-settings-modal").addEventListener("click", closeSettings);
   document.getElementById("save-google-settings").addEventListener("click", () => {
-    state.settings.googleScriptUrl = googleScriptInput.value.trim();
-    state.settings.googleSheetId = googleSheetInput.value.trim();
-    state.settings.googleDocumentFolderId = googleDocumentDriveInput.value.trim();
-    state.settings.googlePhotoFolderId = googlePhotoDriveInput.value.trim();
-    saveState("saveGoogleSetting", { ...state.settings });
+    state.settings.master.googleScriptUrl = googleScriptInput.value.trim();
+    state.settings.master.googleSheetId = googleSheetInput.value.trim();
+    state.settings.master.googleDocumentFolderId = googleDocumentDriveInput.value.trim();
+    state.settings.master.googlePhotoFolderId = googlePhotoDriveInput.value.trim();
+    saveState("saveGoogleSetting", { ...state.settings.master });
     closeSettings();
   });
   document.getElementById("close-task-detail-modal").addEventListener("click", closeTaskDetailModal);
+  document.getElementById("master-login-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const settings = state.settings.master;
+    const userId = document.getElementById("master-login-user").value.trim();
+    const password = document.getElementById("master-login-password").value;
+    const result = await app.loginWithGoogle(settings, "master", userId, password);
+    if (!result.ok) {
+      window.alert(result.message || "Login failed.");
+      return;
+    }
+    masterSession = {
+      userId: result.user.userId,
+      name: result.user.name || result.user.userId,
+      role: result.user.role
+    };
+    app.saveMasterSession(masterSession);
+    showMasterApp();
+  });
+  document.getElementById("master-logout").addEventListener("click", () => {
+    masterSession = null;
+    app.clearMasterSession();
+    showMasterLogin();
+  });
 
   clientMaster.addEventListener("change", () => toggleOtherField(clientMaster, clientMasterOther, "clientMasterOtherWrap", "client"));
   engineerMaster.addEventListener("change", () => toggleOtherField(engineerMaster, engineerMasterOther, "engineerMasterOtherWrap", "engineer"));
@@ -644,5 +683,7 @@
     }
     assignDate.value = new Date().toISOString().split("T")[0];
     refreshAll();
+    if (masterSession) showMasterApp();
+    else showMasterLogin();
   })();
 })();

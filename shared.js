@@ -1,5 +1,6 @@
 (function () {
   const STORAGE_KEY = "bliss-taskpro-state-v2";
+  const MASTER_SESSION_KEY = "bliss-taskpro-master-session";
   const ENGINEER_SESSION_KEY = "bliss-taskpro-engineer-session";
 
   const defaults = {
@@ -11,10 +12,18 @@
       districts: []
     },
     settings: {
-      googleScriptUrl: "",
-      googleSheetId: "",
-      googleDocumentFolderId: "",
-      googlePhotoFolderId: ""
+      master: {
+        googleScriptUrl: "",
+        googleSheetId: "",
+        googleDocumentFolderId: "",
+        googlePhotoFolderId: ""
+      },
+      engineer: {
+        googleScriptUrl: "",
+        googleSheetId: "",
+        googleDocumentFolderId: "",
+        googlePhotoFolderId: ""
+      }
     },
     drafts: [],
     tasks: []
@@ -37,7 +46,7 @@
       const base = cloneDefaults();
       return {
         options: { ...base.options, ...(parsed.options || {}) },
-        settings: { ...base.settings, ...(parsed.settings || {}) },
+        settings: normalizeSettings(parsed.settings, base.settings),
         drafts: Array.isArray(parsed.drafts) ? parsed.drafts : [],
         tasks: Array.isArray(parsed.tasks) ? parsed.tasks : []
       };
@@ -145,13 +154,15 @@
   }
 
   async function postGoogleSync(state, payload) {
-    const endpoint = state.settings.googleScriptUrl;
+    const source = payload.source === "engineer" ? "engineer" : "master";
+    const activeSettings = state.settings?.[source] || {};
+    const endpoint = activeSettings.googleScriptUrl;
     if (!endpoint) return { skipped: true };
     try {
       await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ ...payload, activeSettings })
       });
       return { skipped: false };
     } catch (error) {
@@ -180,6 +191,43 @@
     }
   }
 
+  async function loginWithGoogle(settings, role, userId, password) {
+    const endpoint = settings.googleScriptUrl;
+    if (!endpoint) {
+      return { ok: false, message: "Apps Script URL is required in settings." };
+    }
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "login",
+          source: role,
+          activeSettings: settings,
+          payload: { role, userId, password }
+        })
+      });
+      return await response.json();
+    } catch (error) {
+      return { ok: false, message: "Unable to verify login." };
+    }
+  }
+
+  function normalizeSettings(input, fallback) {
+    const base = JSON.parse(JSON.stringify(fallback));
+    if (!input) return base;
+    if (input.master || input.engineer) {
+      return {
+        master: { ...base.master, ...(input.master || {}) },
+        engineer: { ...base.engineer, ...(input.engineer || {}) }
+      };
+    }
+    return {
+      master: { ...base.master, ...(input || {}) },
+      engineer: { ...base.engineer }
+    };
+  }
+
   async function reverseGeocodeDistrict(latitude, longitude) {
     if (!latitude || !longitude) return "";
     try {
@@ -199,6 +247,19 @@
 
   function saveEngineerSession(name) {
     sessionStorage.setItem(ENGINEER_SESSION_KEY, name);
+  }
+
+  function saveMasterSession(data) {
+    sessionStorage.setItem(MASTER_SESSION_KEY, JSON.stringify(data));
+  }
+
+  function getMasterSession() {
+    const raw = sessionStorage.getItem(MASTER_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }
+
+  function clearMasterSession() {
+    sessionStorage.removeItem(MASTER_SESSION_KEY);
   }
 
   function getEngineerSession() {
@@ -225,6 +286,10 @@
     postGoogleSync,
     fetchGoogleTask,
     reverseGeocodeDistrict,
+    loginWithGoogle,
+    saveMasterSession,
+    getMasterSession,
+    clearMasterSession,
     saveEngineerSession,
     getEngineerSession,
     clearEngineerSession

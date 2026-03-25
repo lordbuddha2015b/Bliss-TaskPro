@@ -3,13 +3,15 @@
   let state = app.readState();
   let activeTaskId = "";
   let currentEngineer = app.getEngineerSession();
+  let engineerUserId = "";
   let map;
   let mapMarker;
   let selectedMapPoint = null;
 
   const loginScreen = document.getElementById("engineer-login-screen");
   const appShell = document.getElementById("engineer-app-shell");
-  const loginSelect = document.getElementById("engineer-login-select");
+  const engineerLoginUser = document.getElementById("engineer-login-user");
+  const engineerLoginPassword = document.getElementById("engineer-login-password");
   const engineerGoogleScriptInput = document.getElementById("engineer-google-script-url");
   const engineerGoogleSheetInput = document.getElementById("engineer-google-sheet-id");
   const engineerGoogleDocumentDriveInput = document.getElementById("engineer-google-document-drive-id");
@@ -20,6 +22,7 @@
     app.postGoogleSync(state, {
       app: "Bliss TaskPro",
       source: "engineer",
+      userId: engineerUserId,
       action,
       payload,
       state
@@ -28,13 +31,6 @@
 
   function refreshState() {
     state = app.readState();
-  }
-
-  function renderLoginOptions() {
-    app.setOptions(loginSelect, state.options.engineers, "Select Engineer");
-    if (currentEngineer && state.options.engineers.includes(currentEngineer)) {
-      loginSelect.value = currentEngineer;
-    }
   }
 
   function getEngineerTasks() {
@@ -403,24 +399,23 @@
     loginScreen.classList.add("hidden");
     appShell.classList.remove("hidden");
     document.getElementById("logged-in-engineer").textContent = currentEngineer;
-    engineerGoogleScriptInput.value = state.settings.googleScriptUrl || "";
-    engineerGoogleSheetInput.value = state.settings.googleSheetId || "";
-    engineerGoogleDocumentDriveInput.value = state.settings.googleDocumentFolderId || "";
-    engineerGooglePhotoDriveInput.value = state.settings.googlePhotoFolderId || "";
+    engineerGoogleScriptInput.value = state.settings.engineer.googleScriptUrl || "";
+    engineerGoogleSheetInput.value = state.settings.engineer.googleSheetId || "";
+    engineerGoogleDocumentDriveInput.value = state.settings.engineer.googleDocumentFolderId || "";
+    engineerGooglePhotoDriveInput.value = state.settings.engineer.googlePhotoFolderId || "";
     renderSiteList();
   }
 
   function showLogin() {
     loginScreen.classList.remove("hidden");
     appShell.classList.add("hidden");
-    renderLoginOptions();
   }
 
   function openSettings() {
-    engineerGoogleScriptInput.value = state.settings.googleScriptUrl || "";
-    engineerGoogleSheetInput.value = state.settings.googleSheetId || "";
-    engineerGoogleDocumentDriveInput.value = state.settings.googleDocumentFolderId || "";
-    engineerGooglePhotoDriveInput.value = state.settings.googlePhotoFolderId || "";
+    engineerGoogleScriptInput.value = state.settings.engineer.googleScriptUrl || "";
+    engineerGoogleSheetInput.value = state.settings.engineer.googleSheetId || "";
+    engineerGoogleDocumentDriveInput.value = state.settings.engineer.googleDocumentFolderId || "";
+    engineerGooglePhotoDriveInput.value = state.settings.engineer.googlePhotoFolderId || "";
     document.getElementById("engineer-settings-modal").classList.remove("hidden");
   }
 
@@ -428,19 +423,24 @@
     document.getElementById("engineer-settings-modal").classList.add("hidden");
   }
 
-  document.getElementById("engineer-login-form").addEventListener("submit", (event) => {
+  document.getElementById("engineer-login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    currentEngineer = loginSelect.value;
-    if (!currentEngineer) {
-      window.alert("Please select engineer name.");
+    const userId = engineerLoginUser.value.trim();
+    const password = engineerLoginPassword.value;
+    const result = await app.loginWithGoogle(state.settings.engineer, "engineer", userId, password);
+    if (!result.ok) {
+      window.alert(result.message || "Login failed.");
       return;
     }
+    currentEngineer = result.user.name || result.user.userId;
+    engineerUserId = result.user.userId || "";
     app.saveEngineerSession(currentEngineer);
     showApp();
   });
 
   document.getElementById("engineer-logout").addEventListener("click", () => {
     currentEngineer = "";
+    engineerUserId = "";
     activeTaskId = "";
     app.clearEngineerSession();
     showLogin();
@@ -449,13 +449,14 @@
   document.getElementById("close-engineer-map-modal").addEventListener("click", closeMap);
   document.getElementById("save-engineer-map-point").addEventListener("click", applyMapGps);
   document.getElementById("engineer-open-settings-modal").addEventListener("click", openSettings);
+  document.getElementById("engineer-login-settings").addEventListener("click", openSettings);
   document.getElementById("close-engineer-settings-modal").addEventListener("click", closeSettings);
   document.getElementById("engineer-save-google-settings").addEventListener("click", () => {
-    state.settings.googleScriptUrl = engineerGoogleScriptInput.value.trim();
-    state.settings.googleSheetId = engineerGoogleSheetInput.value.trim();
-    state.settings.googleDocumentFolderId = engineerGoogleDocumentDriveInput.value.trim();
-    state.settings.googlePhotoFolderId = engineerGooglePhotoDriveInput.value.trim();
-    saveState("saveGoogleSetting", { ...state.settings });
+    state.settings.engineer.googleScriptUrl = engineerGoogleScriptInput.value.trim();
+    state.settings.engineer.googleSheetId = engineerGoogleSheetInput.value.trim();
+    state.settings.engineer.googleDocumentFolderId = engineerGoogleDocumentDriveInput.value.trim();
+    state.settings.engineer.googlePhotoFolderId = engineerGooglePhotoDriveInput.value.trim();
+    saveState("saveGoogleSetting", { ...state.settings.engineer });
     closeSettings();
   });
 
@@ -466,7 +467,6 @@
 
   (function init() {
     refreshState();
-    renderLoginOptions();
     if (currentEngineer) showApp();
     else showLogin();
   })();

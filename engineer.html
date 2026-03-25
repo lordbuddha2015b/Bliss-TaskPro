@@ -13,49 +13,46 @@
 </head>
 <body data-app="engineer">
   <div class="page-watermark" aria-hidden="true"></div>
+
   <div class="engineer-login-shell" id="engineer-login-screen">
     <div class="login-card">
       <img class="brand-logo login-logo" src="./Images/BlissTaskPro_Logo.png" alt="Bliss TaskPro logo">
       <h1 class="brand-title">Bliss TaskPro</h1>
       <form id="engineer-login-form" class="form-grid single-column">
-        <label>
-          <span>Engineer Login</span>
-          <select id="engineer-login-select" required></select>
-        </label>
-        <button type="submit" class="primary-button">View My Tasks</button>
+        <label><span>Engineer User ID</span><input id="engineer-login-user" type="text" required></label>
+        <label><span>Password</span><input id="engineer-login-password" type="password" required></label>
+        <button type="submit" class="primary-button">Login To Engineer App</button>
+        <button id="engineer-login-settings" type="button" class="secondary-button">Settings</button>
       </form>
     </div>
   </div>
 
   <div class="app-shell hidden" id="engineer-app-shell">
     <aside class="sidebar">
-      <div class="brand-lockup">
-        <img class="brand-logo" src="./Images/BlissTaskPro_Logo.png" alt="Bliss TaskPro logo">
-        <div>
-          <p class="eyebrow">Engineer Workspace</p>
-          <h1 class="brand-title">Bliss TaskPro</h1>
+      <div class="topbar-stack">
+        <div class="brand-lockup compact-brand">
+          <img class="brand-logo topbar-logo" src="./Images/BlissTaskPro_Logo.png" alt="Bliss TaskPro logo">
+          <div>
+            <p class="eyebrow">Engineer Workspace</p>
+            <h1 class="brand-title compact-title">Bliss TaskPro</h1>
+          </div>
         </div>
-      </div>
-      <div class="sidebar-card">
-        <span class="sidebar-card-label">Logged In As</span>
-        <strong id="logged-in-engineer"></strong>
-        <button id="engineer-logout" class="secondary-button" type="button">Logout</button>
+        <div class="topbar-row">
+          <div class="sidebar-nav compact-nav">
+            <span id="logged-in-engineer" class="frozen-chip"></span>
+          </div>
+          <div class="action-row compact-actions">
+            <button id="engineer-logout" class="secondary-button" type="button">Logout</button>
+            <button id="engineer-open-settings-modal" class="icon-button" type="button" aria-label="Open settings">S</button>
+          </div>
+        </div>
       </div>
     </aside>
 
     <main class="main-panel">
-      <header class="hero compact-hero">
-        <div class="hero-brand hero-brand-fixed"></div>
-        <button id="engineer-open-settings-modal" class="icon-button" type="button" aria-label="Open settings">⚙</button>
-      </header>
-
       <section class="grid-layout detail-grid engineer-detail-grid">
-        <article class="panel">
-          <div id="engineer-task-detail" class="detail-panel empty-state">Click a Site ID to fetch task details.</div>
-        </article>
-        <article class="panel">
-          <div id="engineer-site-list" class="stack-list"></div>
-        </article>
+        <article class="panel"><div id="engineer-task-detail" class="detail-panel empty-state">Click a Site ID to fetch task details.</div></article>
+        <article class="panel"><div id="engineer-site-list" class="stack-list"></div></article>
       </section>
 
       <section class="stats-strip">
@@ -63,51 +60,28 @@
         <div class="stat-card"><span>WIP Tasks</span><strong id="engineer-wip-tasks">0</strong></div>
         <div class="stat-card"><span>Completed</span><strong id="engineer-completed-tasks">0</strong></div>
       </section>
+      <footer class="app-footer"><img class="footer-logo" src="./Images/BlissTaskPro_Logo.png" alt="Bliss TaskPro logo"></footer>
     </main>
   </div>
 
   <div id="engineer-map-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-card">
-      <div class="modal-header">
-        <h4>Select Completion Location</h4>
-        <button type="button" id="close-engineer-map-modal" class="secondary-button">Close</button>
-      </div>
+      <div class="modal-header"><h4>Select Completion Location</h4><button type="button" id="close-engineer-map-modal" class="secondary-button">Close</button></div>
       <div id="engineer-map-picker" class="map-surface"></div>
-      <div class="modal-footer">
-        <div id="engineer-map-selected-output" class="fine-print">Tap on map to choose latitude and longitude.</div>
-        <button type="button" id="save-engineer-map-point" class="primary-button">Save Selected Location</button>
-      </div>
+      <div class="modal-footer"><div id="engineer-map-selected-output" class="fine-print">Tap on map to choose latitude and longitude.</div><button type="button" id="save-engineer-map-point" class="primary-button">Save Selected Location</button></div>
     </div>
   </div>
 
   <div id="engineer-settings-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-card">
-      <div class="modal-header">
-        <h4>Google Settings</h4>
-        <button type="button" id="close-engineer-settings-modal" class="secondary-button">Close</button>
-      </div>
+      <div class="modal-header"><h4>Engineer Settings</h4><button type="button" id="close-engineer-settings-modal" class="secondary-button">Close</button></div>
       <div class="form-grid">
-        <label class="full-span">
-          <span>Apps Script URL</span>
-          <input id="engineer-google-script-url" type="url" placeholder="Paste Google Apps Script Web App URL">
-        </label>
-        <label>
-          <span>Google Sheet ID</span>
-          <input id="engineer-google-sheet-id" type="text" placeholder="Paste Google Sheet ID">
-        </label>
-        <label>
-          <span>Document Folder ID</span>
-          <input id="engineer-google-document-drive-id" type="text" placeholder="Paste Document Folder ID">
-        </label>
-        <label>
-          <span>Photo Folder ID</span>
-          <input id="engineer-google-photo-drive-id" type="text" placeholder="Paste Photo Folder ID">
-        </label>
+        <label class="full-span"><span>Apps Script URL</span><input id="engineer-google-script-url" type="url" placeholder="Paste Google Apps Script Web App URL"></label>
+        <label><span>Google Sheet ID</span><input id="engineer-google-sheet-id" type="text" placeholder="Paste Google Sheet ID"></label>
+        <label><span>Document Folder ID</span><input id="engineer-google-document-drive-id" type="text" placeholder="Paste Document Folder ID"></label>
+        <label><span>Photo Folder ID</span><input id="engineer-google-photo-drive-id" type="text" placeholder="Paste Photo Folder ID"></label>
       </div>
-      <div class="modal-footer">
-        <div class="fine-print">These settings are shared by Master and Engineer apps.</div>
-        <button id="engineer-save-google-settings" class="primary-button" type="button">Save Settings</button>
-      </div>
+      <div class="modal-footer"><div class="fine-print">These settings are for the Engineer app only.</div><button id="engineer-save-google-settings" class="primary-button" type="button">Save Settings</button></div>
     </div>
   </div>
 
