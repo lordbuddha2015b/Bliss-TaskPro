@@ -4,134 +4,183 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bliss TaskPro | Master App</title>
+  <link rel="icon" type="image/png" href="./Images/BlissTaskPro_Logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body data-app="master">
+  <div class="page-watermark" aria-hidden="true"></div>
   <div class="app-shell">
     <aside class="sidebar">
-      <div>
-        <p class="eyebrow">Bliss TaskPro</p>
-        <h1>Master App</h1>
-        <p class="sidebar-copy">Create Site IDs, assign engineers, and monitor field progress from one responsive dashboard.</p>
+      <div class="brand-lockup">
+        <img class="brand-logo" src="./Images/BlissTaskPro_Logo.png" alt="Bliss TaskPro logo">
+        <div>
+          <p class="eyebrow">Field Task Monitor</p>
+          <h1 class="brand-title">Bliss TaskPro</h1>
+        </div>
       </div>
+
       <nav class="sidebar-nav">
         <button class="nav-chip active" data-page-target="master-page">Master</button>
         <button class="nav-chip" data-page-target="task-page">Task</button>
         <button class="nav-chip" data-page-target="details-page">Task Details</button>
       </nav>
-      <div class="sidebar-card">
-        <span class="sidebar-card-label">Engineer App</span>
-        <p>Open the linked engineer view for assigned task updates.</p>
-        <a class="link-button" href="./engineer.html">Go To Engineer App</a>
-      </div>
     </aside>
 
     <main class="main-panel">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">Field Task Monitoring</p>
-          <h2>Track site work from assignment to completion</h2>
-          <p>Tasks start in gray, switch to orange in WIP, and become green after engineer completion with GPS capture.</p>
+      <header class="hero compact-hero">
+        <div class="brand-lockup hero-brand hero-brand-fixed">
+          <img class="brand-logo hero-logo" src="./Images/BlissTaskPro_Logo.png" alt="Bliss TaskPro logo">
+          <h2 class="brand-title">Bliss TaskPro</h2>
         </div>
-        <div class="hero-stats">
-          <div class="stat-card"><span>Total Tasks</span><strong id="master-total-tasks">0</strong></div>
-          <div class="stat-card"><span>WIP Tasks</span><strong id="master-wip-tasks">0</strong></div>
-          <div class="stat-card"><span>Completed</span><strong id="master-completed-tasks">0</strong></div>
-        </div>
+        <button id="open-settings-modal" class="icon-button" type="button" aria-label="Open settings">⚙</button>
       </header>
 
       <section id="master-page" class="page-section active">
         <div class="section-header">
-          <div>
-            <p class="eyebrow">Page A</p>
-            <h3>Master</h3>
-          </div>
-          <p class="section-copy">Select the task creation details based on your reference sheet.</p>
+          <h3>Master</h3>
         </div>
         <div class="grid-layout two-column">
           <article class="panel">
-            <h4>Create Site ID Template</h4>
-            <form id="master-filter-form" class="form-grid">
+            <form id="master-filter-form" class="form-grid compact-form">
               <label><span>Client</span><select id="clientMaster" name="client" required></select></label>
+              <label id="clientMasterOtherWrap" class="hidden"><span>Other Client</span><input id="clientMasterOther" name="clientOther" type="text"></label>
               <label><span>Engineer</span><select id="engineerMaster" name="engineer" required></select></label>
+              <label id="engineerMasterOtherWrap" class="hidden"><span>Other Engineer</span><input id="engineerMasterOther" name="engineerOther" type="text"></label>
               <label><span>Category</span><select id="categoryMaster" name="category" required></select></label>
+              <label id="categoryMasterOtherWrap" class="hidden"><span>Other Category</span><input id="categoryMasterOther" name="categoryOther" type="text"></label>
               <label><span>Activity</span><select id="activityMaster" name="activity" required></select></label>
-              <label><span>Site ID</span><input type="text" id="siteIdMaster" name="siteId" placeholder="Enter unique Site ID" required></label>
-              <label><span>Site Name</span><input type="text" id="siteNameMaster" name="siteName" placeholder="Site name / tower / office" required></label>
-              <label class="full-span"><span>Task Summary</span><textarea id="summaryMaster" name="summary" rows="3" placeholder="Short task description"></textarea></label>
+              <label id="activityMasterOtherWrap" class="hidden"><span>Other Activity</span><input id="activityMasterOther" name="activityOther" type="text"></label>
               <div class="form-actions full-span"><button type="submit" class="primary-button">Save Draft For Assignment</button></div>
             </form>
           </article>
           <article class="panel">
-            <h4>Saved Drafts</h4>
-            <div id="draft-list" class="stack-list empty-state-host"></div>
+            <div id="draft-list" class="stack-list"></div>
           </article>
         </div>
       </section>
 
       <section id="task-page" class="page-section">
         <div class="section-header">
-          <div>
-            <p class="eyebrow">Page B</p>
-            <h3>Task</h3>
-          </div>
-          <p class="section-copy">Assign the site to the engineer with date and location details.</p>
+          <h3>Task</h3>
         </div>
         <div class="grid-layout two-column">
           <article class="panel">
-            <h4>Task Assignment</h4>
             <form id="task-assignment-form" class="form-grid">
-              <label><span>Client</span><select id="assignClient" name="client" required></select></label>
-              <label><span>Engineer</span><select id="assignEngineer" name="engineer" required></select></label>
-              <label><span>Category</span><select id="assignCategory" name="category" required></select></label>
-              <label><span>Activity</span><select id="assignActivity" name="activity" required></select></label>
+              <label class="full-span">
+                <span>Saved Draft</span>
+                <select id="draftSelector" name="draftId" required></select>
+              </label>
+
+              <div class="full-span frozen-block">
+                <span class="frozen-label">Frozen From Master</span>
+                <div id="frozen-summary" class="chip-row"></div>
+              </div>
+
+              <label><span>Site ID</span><input type="text" id="assignSiteId" name="siteId" required></label>
               <label><span>Date</span><input type="date" id="assignDate" name="date" required></label>
-              <label><span>Site ID</span><input type="text" id="assignSiteId" name="siteId" placeholder="Main task code" required></label>
-              <label><span>Location</span><input type="text" id="assignLocation" name="location" placeholder="City / Area / Landmark" required></label>
+              <label class="full-span"><span>Location</span><input type="text" id="assignLocation" name="location" required></label>
+              <label><span>Latitude</span><input type="number" step="any" id="assignLatitude" name="latitude" readonly></label>
+              <label><span>Longitude</span><input type="number" step="any" id="assignLongitude" name="longitude" readonly></label>
+              <div class="map-actions full-span">
+                <button type="button" id="capture-master-location" class="secondary-button">Use Current Location</button>
+                <button type="button" id="pick-master-location" class="secondary-button">Select On Map</button>
+              </div>
               <label><span>District</span><select id="assignDistrict" name="district" required></select></label>
-              <label class="full-span"><span>Instructions</span><textarea id="assignInstructions" name="instructions" rows="4" placeholder="Assignment notes, safety instructions, or document requirements"></textarea></label>
-              <div class="form-actions full-span"><button type="submit" class="primary-button">Assign Task To Engineer</button></div>
+              <label class="full-span"><span>Instructions</span><textarea id="assignInstructions" name="instructions" rows="4"></textarea></label>
+              <div class="form-actions full-span"><button type="submit" class="primary-button">Assign Task</button></div>
             </form>
           </article>
           <article class="panel">
-            <h4>Assignment Queue</h4>
-            <div id="queue-list" class="stack-list empty-state-host"></div>
+            <div id="queue-list" class="stack-list"></div>
           </article>
         </div>
       </section>
 
       <section id="details-page" class="page-section">
         <div class="section-header">
-          <div>
-            <p class="eyebrow">Page C</p>
-            <h3>Task Details</h3>
-          </div>
-          <p class="section-copy">Live monitor every field task, engineer document uploads, and completion location.</p>
+          <h3>Task Details</h3>
         </div>
-        <article class="panel">
-          <div class="table-actions">
-            <label class="search-field">
-              <span>Search</span>
-              <input id="task-search" type="search" placeholder="Search by Site ID, engineer, client or district">
-            </label>
-          </div>
-          <div class="responsive-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Status</th><th>Site ID</th><th>Engineer</th><th>Client</th><th>Category</th><th>Activity</th><th>Documents</th><th>Photos</th><th>Measurement</th><th>GPS</th>
-                </tr>
-              </thead>
-              <tbody id="master-task-table"></tbody>
-            </table>
-          </div>
-        </article>
+        <div class="grid-layout detail-grid">
+          <article class="panel">
+            <div class="responsive-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Site ID</th>
+                    <th>Engineer</th>
+                    <th>Site Engineer</th>
+                    <th>District</th>
+                    <th>Docs</th>
+                    <th>Photos</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="master-task-table"></tbody>
+              </table>
+            </div>
+          </article>
+          <article class="panel">
+            <div id="completed-detail-panel" class="detail-panel empty-state">Click a completed site ID to fetch and prepare share details.</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="stats-strip">
+        <div class="stat-card"><span>Total Tasks</span><strong id="master-total-tasks">0</strong></div>
+        <div class="stat-card"><span>WIP Tasks</span><strong id="master-wip-tasks">0</strong></div>
+        <div class="stat-card"><span>Completed</span><strong id="master-completed-tasks">0</strong></div>
       </section>
     </main>
   </div>
+
+  <div id="map-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h4>Select Location</h4>
+        <button type="button" id="close-map-modal" class="secondary-button">Close</button>
+      </div>
+      <div id="map-picker" class="map-surface"></div>
+      <div class="modal-footer">
+        <div id="map-selected-output" class="fine-print">Tap on map to choose latitude and longitude.</div>
+        <button type="button" id="save-map-point" class="primary-button">Save Selected Location</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="settings-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h4>Google Settings</h4>
+        <button type="button" id="close-settings-modal" class="secondary-button">Close</button>
+      </div>
+      <div class="form-grid">
+        <label class="full-span">
+          <span>Apps Script URL</span>
+          <input id="google-script-url" type="url" placeholder="Paste Google Apps Script Web App URL">
+        </label>
+        <label>
+          <span>Google Sheet ID</span>
+          <input id="google-sheet-id" type="text" placeholder="Paste Google Sheet ID">
+        </label>
+        <label>
+          <span>Google Drive Folder ID</span>
+          <input id="google-drive-id" type="text" placeholder="Paste Google Drive Folder ID">
+        </label>
+      </div>
+      <div class="modal-footer">
+        <div class="fine-print">These settings are shared by Master and Engineer apps.</div>
+        <button id="save-google-settings" class="primary-button" type="button">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="./shared.js"></script>
   <script src="./master.js"></script>
 </body>

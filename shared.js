@@ -1,5 +1,6 @@
 (function () {
-  const STORAGE_KEY = "bliss-taskpro-state-v1";
+  const STORAGE_KEY = "bliss-taskpro-state-v2";
+  const ENGINEER_SESSION_KEY = "bliss-taskpro-engineer-session";
 
   const defaults = {
     options: {
@@ -7,16 +8,12 @@
       engineers: ["Naveen", "Rocky", "Sriram"],
       categories: ["Project", "O&M", "Others"],
       activities: ["Enod B", "5G", "Upgradation", "Repair", "Others"],
-      districts: [
-        "Bengaluru Urban",
-        "Mysuru",
-        "Tumakuru",
-        "Belagavi",
-        "Dharwad",
-        "Ballari",
-        "Dakshina Kannada",
-        "Shivamogga"
-      ]
+      districts: []
+    },
+    settings: {
+      googleScriptUrl: "",
+      googleSheetId: "",
+      googleDriveFolderId: ""
     },
     drafts: [],
     tasks: []
@@ -36,8 +33,10 @@
 
     try {
       const parsed = JSON.parse(raw);
+      const base = cloneDefaults();
       return {
-        options: parsed.options || cloneDefaults().options,
+        options: { ...base.options, ...(parsed.options || {}) },
+        settings: { ...base.settings, ...(parsed.settings || {}) },
         drafts: Array.isArray(parsed.drafts) ? parsed.drafts : [],
         tasks: Array.isArray(parsed.tasks) ? parsed.tasks : []
       };
@@ -74,14 +73,25 @@
     return "status-pending";
   }
 
-  function ensurePrefixedFiles(siteId, files) {
+  function setOptions(select, items, placeholder) {
+    if (!select) return;
+    const head = placeholder ? `<option value="">${placeholder}</option>` : "";
+    select.innerHTML = `${head}${items.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join("")}`;
+  }
+
+  function emptyMarkup(message) {
+    return `<div class="empty-state">${escapeHtml(message)}</div>`;
+  }
+
+  function ensurePrefixedFiles(siteId, files, extra) {
     return Array.from(files || []).map((file) => ({
       id: uid("file"),
       originalName: file.name,
       storedName: `${siteId}_${file.name}`,
       type: file.type || "application/octet-stream",
       size: file.size || 0,
-      uploadedAt: new Date().toISOString()
+      uploadedAt: new Date().toISOString(),
+      ...extra
     }));
   }
 
@@ -89,14 +99,46 @@
     return tasks.filter((task) => task.status === status).length;
   }
 
-  function setOptions(select, items, placeholder) {
-    if (!select) return;
-    const head = placeholder ? `<option value="">${placeholder}</option>` : "";
-    select.innerHTML = `${head}${items.map((item) => `<option value="${item}">${item}</option>`).join("")}`;
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
-  function emptyMarkup(message) {
-    return `<div class="empty-state">${message}</div>`;
+  async function loadDistricts() {
+    const response = await fetch("./json/karnataka_districts.json");
+    const data = await response.json();
+    return data.map((item) => item.name);
+  }
+
+  async function postGoogleSync(state, payload) {
+    const endpoint = state.settings.googleScriptUrl;
+    if (!endpoint) return { skipped: true };
+    try {
+      await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      return { skipped: false };
+    } catch (error) {
+      return { skipped: false, error };
+    }
+  }
+
+  function saveEngineerSession(name) {
+    sessionStorage.setItem(ENGINEER_SESSION_KEY, name);
+  }
+
+  function getEngineerSession() {
+    return sessionStorage.getItem(ENGINEER_SESSION_KEY) || "";
+  }
+
+  function clearEngineerSession() {
+    sessionStorage.removeItem(ENGINEER_SESSION_KEY);
   }
 
   window.BlissTaskPro = {
@@ -105,9 +147,15 @@
     uid,
     formatDate,
     statusClass,
+    setOptions,
+    emptyMarkup,
     ensurePrefixedFiles,
     countByStatus,
-    setOptions,
-    emptyMarkup
+    escapeHtml,
+    loadDistricts,
+    postGoogleSync,
+    saveEngineerSession,
+    getEngineerSession,
+    clearEngineerSession
   };
 })();
