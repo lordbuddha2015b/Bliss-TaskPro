@@ -14,7 +14,8 @@
   const assignmentForm = document.getElementById("task-assignment-form");
   const googleScriptInput = document.getElementById("google-script-url");
   const googleSheetInput = document.getElementById("google-sheet-id");
-  const googleDriveInput = document.getElementById("google-drive-id");
+  const googleDocumentDriveInput = document.getElementById("google-document-drive-id");
+  const googlePhotoDriveInput = document.getElementById("google-photo-drive-id");
 
   const clientMaster = document.getElementById("clientMaster");
   const engineerMaster = document.getElementById("engineerMaster");
@@ -241,13 +242,17 @@
     pdf.save(`${task.siteId}_summary.pdf`);
   }
 
-  function openTaskDetailModal(taskId) {
+  async function openTaskDetailModal(taskId) {
     const task = state.tasks.find((item) => item.id === taskId);
     const host = document.getElementById("task-detail-modal-content");
     if (!task) {
       host.innerHTML = app.emptyMarkup("Task not found.");
       return;
     }
+
+    const remote = await app.fetchGoogleTask(state.settings, task.siteId);
+    const remoteDocuments = remote?.documents || [];
+    const remotePhotos = remote?.photos || [];
 
     const share = task.sharePackage || {
       selectedDocuments: task.documents.filter((item) => item.answer === "Yes").map((item) => item.id),
@@ -287,7 +292,7 @@
               `).join("")
               : '<span class="fine-print">No uploaded documents.</span>'}
           </div>
-          <ul class="file-list">${task.documents.filter((item) => item.answer === "Yes").map((item) => `<li>${app.escapeHtml(item.storedName)}</li>`).join("") || "<li>No uploaded documents.</li>"}</ul>
+          <ul class="file-list">${(remoteDocuments.length ? remoteDocuments : task.documents.filter((item) => item.answer === "Yes")).map((item) => `<li>${app.escapeHtml(item.name || item.storedName)}</li>`).join("") || "<li>No uploaded documents.</li>"}</ul>
         </div>
 
         <div>
@@ -297,7 +302,7 @@
               ? task.photos.map((item, index) => `<label><input type="checkbox" data-photo-id="${item.id}" ${share.selectedPhotos.includes(item.id) ? "checked" : ""}>Photo ${index + 1}</label>`).join("")
               : '<span class="fine-print">No uploaded photos.</span>'}
           </div>
-          <div class="photo-preview-grid">${task.photos.map((item) => item.previewUrl ? `<img class="photo-preview" src="${item.previewUrl}" alt="${app.escapeHtml(item.storedName)}">` : `<span class="frozen-chip">${app.escapeHtml(item.storedName)}</span>`).join("") || '<span class="fine-print">No uploaded photos.</span>'}</div>
+          <div class="photo-preview-grid">${(remotePhotos.length ? remotePhotos : task.photos).map((item) => item.thumbnailUrl || item.previewUrl ? `<img class="photo-preview" src="${item.thumbnailUrl || item.previewUrl}" alt="${app.escapeHtml(item.name || item.storedName)}">` : `<span class="frozen-chip">${app.escapeHtml(item.name || item.storedName)}</span>`).join("") || '<span class="fine-print">No uploaded photos.</span>'}</div>
         </div>
 
         <div class="check-grid">
@@ -386,7 +391,8 @@
     state = app.readState();
     googleScriptInput.value = state.settings.googleScriptUrl || "";
     googleSheetInput.value = state.settings.googleSheetId || "";
-    googleDriveInput.value = state.settings.googleDriveFolderId || "";
+    googleDocumentDriveInput.value = state.settings.googleDocumentFolderId || "";
+    googlePhotoDriveInput.value = state.settings.googlePhotoFolderId || "";
     setOptions();
     toggleOtherField(clientMaster, clientMasterOther, "clientMasterOtherWrap", "client");
     toggleOtherField(engineerMaster, engineerMasterOther, "engineerMasterOtherWrap", "engineer");
@@ -616,7 +622,8 @@
   document.getElementById("save-google-settings").addEventListener("click", () => {
     state.settings.googleScriptUrl = googleScriptInput.value.trim();
     state.settings.googleSheetId = googleSheetInput.value.trim();
-    state.settings.googleDriveFolderId = googleDriveInput.value.trim();
+    state.settings.googleDocumentFolderId = googleDocumentDriveInput.value.trim();
+    state.settings.googlePhotoFolderId = googlePhotoDriveInput.value.trim();
     saveState("saveGoogleSetting", { ...state.settings });
     closeSettings();
   });

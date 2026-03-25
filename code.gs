@@ -1,18 +1,24 @@
 const CONFIG = {
   APP_NAME: 'Bliss TaskPro',
   SHEET_ID: 'PASTE_GOOGLE_SHEET_ID_HERE',
-  DRIVE_FOLDER_ID: 'PASTE_GOOGLE_DRIVE_FOLDER_ID_HERE',
+  DOCUMENT_FOLDER_ID: 'PASTE_DOCUMENT_FOLDER_ID_HERE',
+  PHOTO_FOLDER_ID: 'PASTE_PHOTO_FOLDER_ID_HERE',
   APP_URL: 'PASTE_DEPLOYED_APPS_SCRIPT_WEB_APP_URL_HERE',
   ALLOWED_ORIGIN: '*'
 };
 
-function doGet() {
+function doGet(e) {
+  const action = (e && e.parameter && e.parameter.action) || '';
+  if (action === 'getTask') {
+    return jsonOutput(getTaskSnapshot_(e.parameter || {}));
+  }
   return jsonOutput({
     ok: true,
     appName: CONFIG.APP_NAME,
     appUrl: CONFIG.APP_URL,
     sheetId: CONFIG.SHEET_ID,
-    driveFolderId: CONFIG.DRIVE_FOLDER_ID
+    documentFolderId: CONFIG.DOCUMENT_FOLDER_ID,
+    photoFolderId: CONFIG.PHOTO_FOLDER_ID
   });
 }
 
@@ -81,13 +87,27 @@ function buildRow_(input) {
 }
 
 function saveFilesToDrive_(task, settings) {
-  const folder = getDriveFolder_(settings);
   const saved = [];
-  const groups = ['documents', 'photos', 'measurementImages'];
+  const mapping = {
+    documents: getDocumentFolder_(settings),
+    photos: getPhotoFolder_(settings),
+    measurementImages: getPhotoFolder_(settings)
+  };
 
-  groups.forEach(function(groupName) {
+  Object.keys(mapping).forEach(function(groupName) {
+    const folder = mapping[groupName];
     (task[groupName] || []).forEach(function(fileItem) {
       if (!fileItem.base64Content) return;
+      const existing = findFileByName_(folder, fileItem.storedName || fileItem.originalName || 'upload.bin');
+      if (existing) {
+        saved.push({
+          group: groupName,
+          name: existing.getName(),
+          url: existing.getUrl(),
+          id: existing.getId()
+        });
+        return;
+      }
       const contentType = fileItem.type || 'application/octet-stream';
       const blob = Utilities.newBlob(
         Utilities.base64Decode(fileItem.base64Content),
@@ -115,12 +135,72 @@ function getSheet_(settings) {
   return SpreadsheetApp.openById(sheetId).getSheets()[0];
 }
 
-function getDriveFolder_(settings) {
-  const folderId = settings.googleDriveFolderId || CONFIG.DRIVE_FOLDER_ID;
+function getDocumentFolder_(settings) {
+  const folderId = settings.googleDocumentFolderId || CONFIG.DOCUMENT_FOLDER_ID;
   if (!folderId || folderId.indexOf('PASTE_') === 0) {
-    throw new Error('Please update CONFIG.DRIVE_FOLDER_ID in code.gs');
+    throw new Error('Please update document folder ID in code.gs');
   }
   return DriveApp.getFolderById(folderId);
+}
+
+function getPhotoFolder_(settings) {
+  const folderId = settings.googlePhotoFolderId || CONFIG.PHOTO_FOLDER_ID;
+  if (!folderId || folderId.indexOf('PASTE_') === 0) {
+    throw new Error('Please update photo folder ID in code.gs');
+  }
+  return DriveApp.getFolderById(folderId);
+}
+
+function findFileByName_(folder, name) {
+  const files = folder.getFilesByName(name);
+  return files.hasNext() ? files.next() : null;
+}
+
+function getTaskSnapshot_(params) {
+  const settings = {
+    googleSheetId: params.sheetId || '',
+    googleDocumentFolderId: params.documentFolderId || '',
+    googlePhotoFolderId: params.photoFolderId || ''
+  };
+  const siteId = params.siteId || '';
+  const sheet = getSheet_(settings);
+  const values = sheet.getDataRange().getValues();
+  const header = values.shift();
+  const latest = values.reverse().find(function(row) {
+    return String(row[4] || '') === String(siteId);
+  });
+
+  return {
+    ok: true,
+    siteId: siteId,
+    latestRow: latest ? mapRow_(header, latest) : null,
+    documents: listFilesByPrefix_(getDocumentFolder_(settings), siteId + '_'),
+    photos: listFilesByPrefix_(getPhotoFolder_(settings), siteId + '_')
+  };
+}
+
+function mapRow_(header, row) {
+  const out = {};
+  header.forEach(function(key, index) {
+    out[key] = row[index];
+  });
+  return out;
+}
+
+function listFilesByPrefix_(folder, prefix) {
+  const files = folder.getFiles();
+  const results = [];
+  while (files.hasNext()) {
+    const file = files.next();
+    if (String(file.getName()).indexOf(prefix) !== 0) continue;
+    results.push({
+      id: file.getId(),
+      name: file.getName(),
+      url: file.getUrl(),
+      thumbnailUrl: 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w400'
+    });
+  }
+  return results;
 }
 
 function ensureHeader_(sheet) {

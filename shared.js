@@ -13,7 +13,8 @@
     settings: {
       googleScriptUrl: "",
       googleSheetId: "",
-      googleDriveFolderId: ""
+      googleDocumentFolderId: "",
+      googlePhotoFolderId: ""
     },
     drafts: [],
     tasks: []
@@ -158,6 +159,27 @@
     }
   }
 
+  async function fetchGoogleTask(settings, siteId) {
+    const endpoint = settings.googleScriptUrl;
+    if (!endpoint || !siteId) return null;
+    try {
+      const url = new URL(endpoint);
+      url.searchParams.set("action", "getTask");
+      url.searchParams.set("siteId", siteId);
+      url.searchParams.set("sheetId", settings.googleSheetId || "");
+      url.searchParams.set("documentFolderId", settings.googleDocumentFolderId || "");
+      url.searchParams.set("photoFolderId", settings.googlePhotoFolderId || "");
+      const response = await fetch(url.toString(), {
+        headers: {
+          Accept: "application/json"
+        }
+      });
+      return await response.json();
+    } catch (error) {
+      return null;
+    }
+  }
+
   async function reverseGeocodeDistrict(latitude, longitude) {
     if (!latitude || !longitude) return "";
     try {
@@ -201,6 +223,7 @@
     escapeHtml,
     loadDistricts,
     postGoogleSync,
+    fetchGoogleTask,
     reverseGeocodeDistrict,
     saveEngineerSession,
     getEngineerSession,
