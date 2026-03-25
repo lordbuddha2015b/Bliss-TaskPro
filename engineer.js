@@ -217,10 +217,11 @@
     }, "markCompleted");
   }
 
-  function addDocument(taskId) {
+  async function addDocument(taskId) {
     const answer = document.getElementById("documentAnswer").value;
     if (answer === "No") {
       updateTask(taskId, (task) => {
+        task.documents = task.documents.filter((item) => item.answer !== "No");
         task.documents.push({
           id: app.uid("doc"),
           answer: "No",
@@ -239,9 +240,10 @@
       return;
     }
 
-    updateTask(taskId, (task) => {
-      const files = app.ensurePrefixedFiles(task.siteId, fileInput.files, { answer: "Yes", docType: type });
-      task.documents = task.documents.concat(files);
+    const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
+    const files = await app.enrichFilesWithContent(task.siteId, fileInput.files, { answer: "Yes", docType: type });
+    updateTask(taskId, (taskItem) => {
+      taskItem.documents = taskItem.documents.concat(files);
     }, "addDocumentYes");
   }
 
@@ -272,19 +274,22 @@
     }
 
     const coords = await getCurrentCoords();
-    updateTask(taskId, (task) => {
-      const next = app.ensurePrefixedFiles(task.siteId, files, coords || {});
-      task.photos = task.photos.concat(next);
+    const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
+    const next = await app.enrichFilesWithContent(task.siteId, files, coords || {});
+    updateTask(taskId, (taskItem) => {
+      taskItem.photos = taskItem.photos.concat(next);
     }, "addPhotos");
   }
 
-  function saveMeasurement(taskId) {
+  async function saveMeasurement(taskId) {
     const measurementText = document.getElementById("measurementText").value.trim();
     const measurementFiles = document.getElementById("measurementUpload").files;
-    updateTask(taskId, (task) => {
-      task.measurementText = measurementText;
-      if (measurementFiles.length) {
-        task.measurementImages = task.measurementImages.concat(app.ensurePrefixedFiles(task.siteId, measurementFiles, {}));
+    const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
+    const nextFiles = measurementFiles.length ? await app.enrichFilesWithContent(task.siteId, measurementFiles, {}) : [];
+    updateTask(taskId, (taskItem) => {
+      taskItem.measurementText = measurementText;
+      if (nextFiles.length) {
+        taskItem.measurementImages = taskItem.measurementImages.concat(nextFiles);
       }
     }, "saveMeasurement");
   }

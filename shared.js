@@ -95,6 +95,35 @@
     }));
   }
 
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function enrichFilesWithContent(siteId, files, extra) {
+    const items = [];
+    for (const file of Array.from(files || [])) {
+      const dataUrl = await readFileAsDataUrl(file);
+      const base64Content = String(dataUrl).split(",")[1] || "";
+      items.push({
+        id: uid("file"),
+        originalName: file.name,
+        storedName: `${siteId}_${file.name}`,
+        type: file.type || "application/octet-stream",
+        size: file.size || 0,
+        uploadedAt: new Date().toISOString(),
+        base64Content,
+        previewUrl: dataUrl,
+        ...extra
+      });
+    }
+    return items;
+  }
+
   function countByStatus(tasks, status) {
     return tasks.filter((task) => task.status === status).length;
   }
@@ -129,6 +158,23 @@
     }
   }
 
+  async function reverseGeocodeDistrict(latitude, longitude) {
+    if (!latitude || !longitude) return "";
+    try {
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`;
+      const response = await fetch(url, {
+        headers: {
+          Accept: "application/json"
+        }
+      });
+      const data = await response.json();
+      const address = data.address || {};
+      return address.state_district || address.county || address.city_district || "";
+    } catch (error) {
+      return "";
+    }
+  }
+
   function saveEngineerSession(name) {
     sessionStorage.setItem(ENGINEER_SESSION_KEY, name);
   }
@@ -150,10 +196,12 @@
     setOptions,
     emptyMarkup,
     ensurePrefixedFiles,
+    enrichFilesWithContent,
     countByStatus,
     escapeHtml,
     loadDistricts,
     postGoogleSync,
+    reverseGeocodeDistrict,
     saveEngineerSession,
     getEngineerSession,
     clearEngineerSession

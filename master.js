@@ -2,8 +2,8 @@
   const app = window.BlissTaskPro;
   let state = app.readState();
   let selectedDraftId = "";
-  let selectedMapTarget = "master";
   let selectedMapPoint = null;
+  let currentEditTaskId = "";
   let map;
   let mapMarker;
 
@@ -67,11 +67,9 @@
   }
 
   function pushOptionIfMissing(key, value) {
-    if (!value) return;
-    if (!state.options[key].includes(value)) {
-      state.options[key].push(value);
-      state.options[key].sort((a, b) => a.localeCompare(b));
-    }
+    if (!value || state.options[key].includes(value)) return;
+    state.options[key].push(value);
+    state.options[key].sort((a, b) => a.localeCompare(b));
   }
 
   function renderStats() {
@@ -95,19 +93,23 @@
     `).join("");
   }
 
+  function getAvailableDrafts() {
+    return state.drafts.filter((draft) => !state.tasks.some((task) => task.draftId === draft.id && task.id !== currentEditTaskId));
+  }
+
   function renderDraftSelector() {
-    if (!state.drafts.length) {
+    const drafts = getAvailableDrafts();
+    if (!drafts.length) {
       draftSelector.innerHTML = '<option value="">No draft available</option>';
-      document.getElementById("frozen-summary").innerHTML = app.emptyMarkup("Save a master draft first.");
-      selectedDraftId = "";
+      document.getElementById("frozen-summary").innerHTML = app.emptyMarkup("Only unassigned drafts are shown.");
       return;
     }
 
-    draftSelector.innerHTML = `<option value="">Select Draft</option>${state.drafts.map((draft) => `
+    draftSelector.innerHTML = `<option value="">Select Draft</option>${drafts.map((draft) => `
       <option value="${draft.id}">${app.escapeHtml(draft.client)} | ${app.escapeHtml(draft.engineer)} | ${app.escapeHtml(draft.category)} | ${app.escapeHtml(draft.activity)}</option>
     `).join("")}`;
 
-    if (selectedDraftId && state.drafts.some((draft) => draft.id === selectedDraftId)) {
+    if (selectedDraftId && drafts.some((draft) => draft.id === selectedDraftId)) {
       draftSelector.value = selectedDraftId;
     }
     renderFrozenSummary();
@@ -142,9 +144,19 @@
         <h5>${app.escapeHtml(task.siteId)}</h5>
         <p class="meta-line">${app.escapeHtml(task.client)} | ${app.escapeHtml(task.engineer)}</p>
         <p class="meta-line">${app.formatDate(task.date)} | ${app.escapeHtml(task.district)}</p>
-        <span class="status-pill ${app.statusClass(task.status)}">${task.status}</span>
+        <div class="action-row">
+          <span class="status-pill ${app.statusClass(task.status)}">${task.status}</span>
+          ${task.status === "Pending" ? `<button class="secondary-button" data-edit-task="${task.id}">Edit</button><button class="secondary-button" data-delete-task="${task.id}">Delete</button>` : ""}
+        </div>
       </article>
     `).join("");
+
+    host.querySelectorAll("[data-edit-task]").forEach((button) => {
+      button.addEventListener("click", () => loadTaskForEdit(button.dataset.editTask));
+    });
+    host.querySelectorAll("[data-delete-task]").forEach((button) => {
+      button.addEventListener("click", () => deleteTask(button.dataset.deleteTask));
+    });
   }
 
   function renderTaskTable() {
@@ -157,113 +169,18 @@
     host.innerHTML = state.tasks.slice().reverse().map((task) => `
       <tr>
         <td><span class="status-pill ${app.statusClass(task.status)}">${task.status}</span></td>
-        <td>
-          ${task.status === "Completed"
-            ? `<button class="site-link-button" data-completed-id="${task.id}">${app.escapeHtml(task.siteId)}</button>`
-            : `<strong>${app.escapeHtml(task.siteId)}</strong>`}
-        </td>
+        <td><button class="site-link-button" data-open-task="${task.id}">${app.escapeHtml(task.siteId)}</button></td>
         <td>${app.escapeHtml(task.engineer)}</td>
         <td>${app.escapeHtml(task.siteEngineerName || "-")}</td>
-        <td>${app.escapeHtml(task.district)}</td>
+        <td>${app.escapeHtml(task.district || "-")}</td>
         <td>${task.documents.filter((item) => item.answer === "Yes").length}</td>
         <td>${task.photos.length}</td>
-        <td>${task.status === "Completed" ? `<button class="secondary-button" data-completed-id="${task.id}">Completed</button>` : "Pending"}</td>
+        <td><button class="secondary-button" data-open-task="${task.id}">${task.status}</button></td>
       </tr>
     `).join("");
 
-    host.querySelectorAll("[data-completed-id]").forEach((button) => {
-      button.addEventListener("click", () => renderCompletedDetail(button.dataset.completedId));
-    });
-  }
-
-  function renderCompletedDetail(taskId) {
-    const task = state.tasks.find((item) => item.id === taskId);
-    const host = document.getElementById("completed-detail-panel");
-    if (!task) {
-      host.innerHTML = app.emptyMarkup("Task not found.");
-      return;
-    }
-
-    const share = task.sharePackage || {
-      selectedDocuments: task.documents.filter((item) => item.answer === "Yes").map((item) => item.id),
-      selectedPhotos: task.photos.map((item) => item.id),
-      includeMeasurement: true,
-      includeMeasurementImages: true,
-      includeInstructions: true,
-      includeGps: true,
-      workOrder: "",
-      billingStatus: "No",
-      invoiceNumber: "",
-      value: ""
-    };
-
-    host.innerHTML = `
-      <div class="detail-panel" data-share-task-id="${task.id}">
-        <div>
-          <h4>${app.escapeHtml(task.siteId)}</h4>
-          <p class="meta-line">${app.escapeHtml(task.client)} | ${app.escapeHtml(task.engineer)} | ${app.escapeHtml(task.siteEngineerName || "-")}</p>
-        </div>
-
-        <div>
-          <strong>Documents</strong>
-          <div class="check-grid">
-            ${task.documents.filter((item) => item.answer === "Yes").length
-              ? task.documents.filter((item) => item.answer === "Yes").map((item) => `
-                <label><input type="checkbox" data-doc-id="${item.id}" ${share.selectedDocuments.includes(item.id) ? "checked" : ""}>${app.escapeHtml(item.docType || item.storedName)}</label>
-              `).join("")
-              : '<span class="fine-print">No document selected as Yes.</span>'}
-          </div>
-        </div>
-
-        <div>
-          <strong>Photos</strong>
-          <div class="check-grid">
-            ${task.photos.length
-              ? task.photos.map((item, index) => `
-                <label><input type="checkbox" data-photo-id="${item.id}" ${share.selectedPhotos.includes(item.id) ? "checked" : ""}>Photo ${index + 1}</label>
-              `).join("")
-              : '<span class="fine-print">No photos uploaded.</span>'}
-          </div>
-        </div>
-
-        <div class="check-grid">
-          <label><input type="checkbox" id="includeMeasurement" ${share.includeMeasurement ? "checked" : ""}>Measurement Text</label>
-          <label><input type="checkbox" id="includeMeasurementImages" ${share.includeMeasurementImages ? "checked" : ""}>Measurement Images</label>
-          <label><input type="checkbox" id="includeInstructions" ${share.includeInstructions ? "checked" : ""}>Instructions</label>
-          <label><input type="checkbox" id="includeGps" ${share.includeGps ? "checked" : ""}>GPS</label>
-        </div>
-
-        <div class="form-grid">
-          <label><span>WO</span><input id="shareWorkOrder" type="text" value="${app.escapeHtml(share.workOrder)}"></label>
-          <label><span>Billing Status</span>
-            <select id="shareBillingStatus">
-              <option value="Yes" ${share.billingStatus === "Yes" ? "selected" : ""}>Yes</option>
-              <option value="No" ${share.billingStatus === "No" ? "selected" : ""}>No</option>
-            </select>
-          </label>
-          <label><span>Invoice Number</span><input id="shareInvoiceNumber" type="text" value="${app.escapeHtml(share.invoiceNumber)}"></label>
-          <label><span>Value</span><input id="shareValue" type="number" step="0.01" value="${app.escapeHtml(share.value)}"></label>
-        </div>
-
-        <div class="action-row">
-          <button id="save-share-package" class="secondary-button" type="button">Save Selection</button>
-          <button id="download-share-pdf" class="primary-button" type="button">Export PDF</button>
-        </div>
-      </div>
-    `;
-
-    document.getElementById("save-share-package").addEventListener("click", () => {
-      const nextShare = collectSharePackage(task.id);
-      task.sharePackage = nextShare;
-      saveState("saveSharePackage", { taskId: task.id, sharePackage: nextShare });
-      renderCompletedDetail(task.id);
-    });
-
-    document.getElementById("download-share-pdf").addEventListener("click", () => {
-      const nextShare = collectSharePackage(task.id);
-      task.sharePackage = nextShare;
-      saveState("exportSharePdf", { taskId: task.id, sharePackage: nextShare });
-      exportTaskPdf(task, nextShare);
+    host.querySelectorAll("[data-open-task]").forEach((button) => {
+      button.addEventListener("click", () => openTaskDetailModal(button.dataset.openTask));
     });
   }
 
@@ -285,11 +202,7 @@
 
   function exportTaskPdf(task, share) {
     const jsPDF = window.jspdf?.jsPDF;
-    if (!jsPDF) {
-      window.alert("PDF library not loaded.");
-      return;
-    }
-
+    if (!jsPDF) return;
     const pdf = new jsPDF();
     const selectedDocs = task.documents.filter((item) => share.selectedDocuments.includes(item.id));
     const selectedPhotos = task.photos.filter((item) => share.selectedPhotos.includes(item.id));
@@ -311,22 +224,150 @@
     line(`Client: ${task.client}`);
     line(`Engineer: ${task.engineer}`);
     line(`Site Engineer: ${task.siteEngineerName || "-"}`);
+    line(`Status: ${task.status}`);
     line(`Date: ${app.formatDate(task.date)}`);
-    line(`District: ${task.district}`);
+    line(`District: ${task.district || "-"}`);
     line(`Location: ${task.location}`);
     line(`WO: ${share.workOrder}`);
     line(`Billing Status: ${share.billingStatus}`);
     line(`Invoice Number: ${share.invoiceNumber}`);
     line(`Value: ${share.value}`);
-
     if (share.includeInstructions) line(`Instructions: ${task.instructions || "-"}`);
     if (share.includeMeasurement) line(`Measurement: ${task.measurementText || "-"}`);
-    if (share.includeGps) line(`Completion GPS: ${task.gps ? `${task.gps.latitude}, ${task.gps.longitude}` : "-"}`);
+    if (share.includeGps) line(`GPS: ${task.gps ? `${task.gps.latitude}, ${task.gps.longitude}` : "-"}`);
     if (share.includeMeasurementImages) line(`Measurement Images: ${task.measurementImages.map((item) => item.storedName).join(", ") || "-"}`);
     line(`Documents: ${selectedDocs.map((item) => item.storedName).join(", ") || "-"}`);
     line(`Photos: ${selectedPhotos.map((item) => item.storedName).join(", ") || "-"}`);
-
     pdf.save(`${task.siteId}_summary.pdf`);
+  }
+
+  function openTaskDetailModal(taskId) {
+    const task = state.tasks.find((item) => item.id === taskId);
+    const host = document.getElementById("task-detail-modal-content");
+    if (!task) {
+      host.innerHTML = app.emptyMarkup("Task not found.");
+      return;
+    }
+
+    const share = task.sharePackage || {
+      selectedDocuments: task.documents.filter((item) => item.answer === "Yes").map((item) => item.id),
+      selectedPhotos: task.photos.map((item) => item.id),
+      includeMeasurement: true,
+      includeMeasurementImages: true,
+      includeInstructions: true,
+      includeGps: true,
+      workOrder: "",
+      billingStatus: "No",
+      invoiceNumber: "",
+      value: ""
+    };
+
+    host.innerHTML = `
+      <div class="detail-panel">
+        <div>
+          <h4>${app.escapeHtml(task.siteId)}</h4>
+          <p class="meta-line">${app.escapeHtml(task.client)} | ${app.escapeHtml(task.engineer)} | ${app.escapeHtml(task.siteEngineerName || "-")}</p>
+          <p class="meta-line">${app.formatDate(task.date)} | ${app.escapeHtml(task.location)} | ${app.escapeHtml(task.district || "-")}</p>
+          <span class="status-pill ${app.statusClass(task.status)}">${task.status}</span>
+        </div>
+
+        <div class="form-grid">
+          <div><strong>Instructions</strong><p class="meta-line">${app.escapeHtml(task.instructions || "-")}</p></div>
+          <div><strong>Measurement</strong><p class="meta-line">${app.escapeHtml(task.measurementText || "-")}</p></div>
+          <div><strong>GPS</strong><p class="meta-line">${task.gps ? `${task.gps.latitude}, ${task.gps.longitude}` : "-"}</p></div>
+          <div><strong>Rollback Reason</strong><p class="meta-line">${app.escapeHtml(task.rollbackReason || "-")}</p></div>
+        </div>
+
+        <div>
+          <strong>Documents</strong>
+          <div class="check-grid">
+            ${task.documents.filter((item) => item.answer === "Yes").length
+              ? task.documents.filter((item) => item.answer === "Yes").map((item) => `
+                <label><input type="checkbox" data-doc-id="${item.id}" ${share.selectedDocuments.includes(item.id) ? "checked" : ""}>${app.escapeHtml(item.docType || item.storedName)}</label>
+              `).join("")
+              : '<span class="fine-print">No uploaded documents.</span>'}
+          </div>
+          <ul class="file-list">${task.documents.filter((item) => item.answer === "Yes").map((item) => `<li>${app.escapeHtml(item.storedName)}</li>`).join("") || "<li>No uploaded documents.</li>"}</ul>
+        </div>
+
+        <div>
+          <strong>Photos</strong>
+          <div class="check-grid">
+            ${task.photos.length
+              ? task.photos.map((item, index) => `<label><input type="checkbox" data-photo-id="${item.id}" ${share.selectedPhotos.includes(item.id) ? "checked" : ""}>Photo ${index + 1}</label>`).join("")
+              : '<span class="fine-print">No uploaded photos.</span>'}
+          </div>
+          <div class="photo-preview-grid">${task.photos.map((item) => item.previewUrl ? `<img class="photo-preview" src="${item.previewUrl}" alt="${app.escapeHtml(item.storedName)}">` : `<span class="frozen-chip">${app.escapeHtml(item.storedName)}</span>`).join("") || '<span class="fine-print">No uploaded photos.</span>'}</div>
+        </div>
+
+        <div class="check-grid">
+          <label><input type="checkbox" id="includeMeasurement" ${share.includeMeasurement ? "checked" : ""}>Measurement Text</label>
+          <label><input type="checkbox" id="includeMeasurementImages" ${share.includeMeasurementImages ? "checked" : ""}>Measurement Images</label>
+          <label><input type="checkbox" id="includeInstructions" ${share.includeInstructions ? "checked" : ""}>Instructions</label>
+          <label><input type="checkbox" id="includeGps" ${share.includeGps ? "checked" : ""}>GPS</label>
+        </div>
+
+        <div class="form-grid">
+          <label><span>WO</span><input id="shareWorkOrder" type="text" value="${app.escapeHtml(share.workOrder)}"></label>
+          <label><span>Billing Status</span><select id="shareBillingStatus"><option value="Yes" ${share.billingStatus === "Yes" ? "selected" : ""}>Yes</option><option value="No" ${share.billingStatus === "No" ? "selected" : ""}>No</option></select></label>
+          <label><span>Invoice Number</span><input id="shareInvoiceNumber" type="text" value="${app.escapeHtml(share.invoiceNumber)}"></label>
+          <label><span>Value</span><input id="shareValue" type="number" step="0.01" value="${app.escapeHtml(share.value)}"></label>
+        </div>
+
+        ${task.status === "Completed" ? `
+          <div class="form-grid">
+            <label class="full-span"><span>Rollback Reason</span><textarea id="rollbackReason"></textarea></label>
+          </div>
+          <div class="action-row">
+            <button id="rollback-to-wip" class="secondary-button" type="button">Rollback To WIP</button>
+            <button id="rollback-to-pending" class="secondary-button" type="button">Rollback To Pending</button>
+          </div>
+        ` : ""}
+
+        <div class="action-row">
+          <button id="save-share-package" class="secondary-button" type="button">Save Selection</button>
+          <button id="download-share-pdf" class="primary-button" type="button">Export PDF</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("save-share-package").addEventListener("click", () => {
+      task.sharePackage = collectSharePackage(task.id);
+      saveState("saveSharePackage", { taskId: task.id, sharePackage: task.sharePackage });
+      openTaskDetailModal(task.id);
+    });
+
+    document.getElementById("download-share-pdf").addEventListener("click", () => {
+      task.sharePackage = collectSharePackage(task.id);
+      saveState("exportSharePdf", { taskId: task.id, sharePackage: task.sharePackage });
+      exportTaskPdf(task, task.sharePackage);
+    });
+
+    if (task.status === "Completed") {
+      document.getElementById("rollback-to-wip").addEventListener("click", () => rollbackTask(task.id, "WIP"));
+      document.getElementById("rollback-to-pending").addEventListener("click", () => rollbackTask(task.id, "Pending"));
+    }
+
+    document.getElementById("task-detail-modal").classList.remove("hidden");
+  }
+
+  function rollbackTask(taskId, nextStatus) {
+    const task = state.tasks.find((item) => item.id === taskId);
+    const reason = document.getElementById("rollbackReason")?.value.trim();
+    if (!reason) {
+      window.alert("Please enter rollback reason.");
+      return;
+    }
+    task.status = nextStatus;
+    task.rollbackReason = reason;
+    task.updatedAt = new Date().toISOString();
+    saveState("rollbackTask", { taskId, nextStatus, reason });
+    closeTaskDetailModal();
+    refreshAll();
+  }
+
+  function closeTaskDetailModal() {
+    document.getElementById("task-detail-modal").classList.add("hidden");
   }
 
   function resetAssignmentForm() {
@@ -334,7 +375,11 @@
     assignDate.value = new Date().toISOString().split("T")[0];
     assignLatitude.value = "";
     assignLongitude.value = "";
+    currentEditTaskId = "";
+    selectedDraftId = "";
+    draftSelector.value = "";
     renderFrozenSummary();
+    assignmentForm.querySelector('button[type="submit"]').textContent = "Assign Task";
   }
 
   function refreshAll() {
@@ -354,8 +399,7 @@
     renderStats();
   }
 
-  function openMap(target) {
-    selectedMapTarget = target;
+  function openMap() {
     selectedMapPoint = null;
     document.getElementById("map-modal").classList.remove("hidden");
     if (!map) {
@@ -378,29 +422,71 @@
     document.getElementById("map-modal").classList.add("hidden");
   }
 
+  async function applyCoords(lat, lng) {
+    assignLatitude.value = lat;
+    assignLongitude.value = lng;
+    const district = await app.reverseGeocodeDistrict(lat, lng);
+    if (district && state.options.districts.includes(district)) {
+      districtSelect.value = district;
+    } else if (district) {
+      pushOptionIfMissing("districts", district);
+      app.writeState(state);
+      app.setOptions(districtSelect, state.options.districts, "Select District");
+      districtSelect.value = district;
+    }
+  }
+
+  function captureCurrentLocation() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        await applyCoords(position.coords.latitude.toFixed(6), position.coords.longitude.toFixed(6));
+      },
+      () => window.alert("Unable to fetch current location."),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
+  async function syncDistrictFromInputs() {
+    if (assignLatitude.value && assignLongitude.value) {
+      await applyCoords(assignLatitude.value, assignLongitude.value);
+    }
+  }
+
+  function loadTaskForEdit(taskId) {
+    const task = state.tasks.find((item) => item.id === taskId);
+    if (!task || task.status !== "Pending") return;
+    currentEditTaskId = task.id;
+    selectedDraftId = task.draftId;
+    renderDraftSelector();
+    draftSelector.value = task.draftId;
+    renderFrozenSummary();
+    assignSiteId.value = task.siteId;
+    assignDate.value = task.date;
+    assignLocation.value = task.location;
+    assignLatitude.value = task.latitude || "";
+    assignLongitude.value = task.longitude || "";
+    districtSelect.value = task.district || "";
+    assignInstructions.value = task.instructions || "";
+    assignmentForm.querySelector('button[type="submit"]').textContent = "Update Task";
+    document.querySelector('[data-page-target="task-page"]').click();
+  }
+
+  function deleteTask(taskId) {
+    const task = state.tasks.find((item) => item.id === taskId);
+    if (!task || task.status !== "Pending") return;
+    state.tasks = state.tasks.filter((item) => item.id !== taskId);
+    saveState("deleteTask", { taskId });
+    if (currentEditTaskId === taskId) resetAssignmentForm();
+    refreshAll();
+  }
+
   function openSettings() {
     document.getElementById("settings-modal").classList.remove("hidden");
   }
 
   function closeSettings() {
     document.getElementById("settings-modal").classList.add("hidden");
-  }
-
-  function applyCoords(lat, lng) {
-    assignLatitude.value = lat;
-    assignLongitude.value = lng;
-  }
-
-  function captureCurrentLocation() {
-    if (!navigator.geolocation) {
-      window.alert("Geolocation not supported.");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (position) => applyCoords(position.coords.latitude, position.coords.longitude),
-      () => window.alert("Unable to fetch current location."),
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
   }
 
   masterForm.addEventListener("submit", (event) => {
@@ -410,7 +496,6 @@
     const engineer = resolveSelectValue(String(form.get("engineer")), String(form.get("engineerOther") || ""));
     const category = resolveSelectValue(String(form.get("category")), String(form.get("categoryOther") || ""));
     const activity = resolveSelectValue(String(form.get("activity")), String(form.get("activityOther") || ""));
-
     if (!client || !engineer || !category || !activity) {
       window.alert("Please fill the Other field where selected.");
       return;
@@ -421,17 +506,10 @@
     pushOptionIfMissing("categories", category);
     pushOptionIfMissing("activities", activity);
 
-    state.drafts.push({
-      id: app.uid("draft"),
-      client,
-      engineer,
-      category,
-      activity,
-      createdAt: new Date().toISOString()
-    });
-    saveState("saveDraft", state.drafts[state.drafts.length - 1]);
+    const draft = { id: app.uid("draft"), client, engineer, category, activity, createdAt: new Date().toISOString() };
+    state.drafts.push(draft);
+    saveState("saveDraft", draft);
     masterForm.reset();
-    setOptions();
     refreshAll();
   });
 
@@ -444,39 +522,65 @@
       return;
     }
     const siteId = String(form.get("siteId")).trim();
-    if (state.tasks.some((task) => task.siteId === siteId)) {
+    const duplicate = state.tasks.some((task) => task.siteId === siteId && task.id !== currentEditTaskId);
+    if (duplicate) {
       window.alert("Site ID already exists.");
       return;
     }
 
-    const task = {
-      id: app.uid("task"),
-      draftId: draft.id,
-      client: draft.client,
-      engineer: draft.engineer,
-      category: draft.category,
-      activity: draft.activity,
-      siteId,
-      date: String(form.get("date")),
-      location: String(form.get("location")).trim(),
-      latitude: String(form.get("latitude")).trim(),
-      longitude: String(form.get("longitude")).trim(),
-      district: String(form.get("district")),
-      instructions: String(form.get("instructions")).trim(),
-      status: "Pending",
-      siteEngineerName: "",
-      documents: [],
-      photos: [],
-      measurementText: "",
-      measurementImages: [],
-      gps: null,
-      sharePackage: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    if (currentEditTaskId) {
+      const task = state.tasks.find((item) => item.id === currentEditTaskId);
+      if (!task || task.status !== "Pending") {
+        window.alert("Only pending tasks can be updated.");
+        return;
+      }
+      Object.assign(task, {
+        draftId: draft.id,
+        client: draft.client,
+        engineer: draft.engineer,
+        category: draft.category,
+        activity: draft.activity,
+        siteId,
+        date: String(form.get("date")),
+        location: String(form.get("location")).trim(),
+        latitude: String(form.get("latitude")).trim(),
+        longitude: String(form.get("longitude")).trim(),
+        district: String(form.get("district")),
+        instructions: String(form.get("instructions")).trim(),
+        updatedAt: new Date().toISOString()
+      });
+      saveState("updateTask", task);
+    } else {
+      const task = {
+        id: app.uid("task"),
+        draftId: draft.id,
+        client: draft.client,
+        engineer: draft.engineer,
+        category: draft.category,
+        activity: draft.activity,
+        siteId,
+        date: String(form.get("date")),
+        location: String(form.get("location")).trim(),
+        latitude: String(form.get("latitude")).trim(),
+        longitude: String(form.get("longitude")).trim(),
+        district: String(form.get("district")),
+        instructions: String(form.get("instructions")).trim(),
+        status: "Pending",
+        siteEngineerName: "",
+        documents: [],
+        photos: [],
+        measurementText: "",
+        measurementImages: [],
+        gps: null,
+        sharePackage: null,
+        rollbackReason: "",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      state.tasks.push(task);
+      saveState("assignTask", task);
+    }
 
-    state.tasks.push(task);
-    saveState("assignTask", task);
     resetAssignmentForm();
     refreshAll();
     document.querySelector('[data-page-target="details-page"]').click();
@@ -486,6 +590,9 @@
     selectedDraftId = draftSelector.value;
     renderFrozenSummary();
   });
+
+  assignLatitude.addEventListener("change", syncDistrictFromInputs);
+  assignLongitude.addEventListener("change", syncDistrictFromInputs);
 
   navButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -497,17 +604,13 @@
   });
 
   document.getElementById("capture-master-location").addEventListener("click", captureCurrentLocation);
-  document.getElementById("pick-master-location").addEventListener("click", () => openMap("master"));
+  document.getElementById("pick-master-location").addEventListener("click", openMap);
   document.getElementById("close-map-modal").addEventListener("click", closeMap);
-  document.getElementById("save-map-point").addEventListener("click", () => {
-    if (!selectedMapPoint) {
-      window.alert("Please select a point on the map.");
-      return;
-    }
-    applyCoords(selectedMapPoint.lat.toFixed(6), selectedMapPoint.lng.toFixed(6));
+  document.getElementById("save-map-point").addEventListener("click", async () => {
+    if (!selectedMapPoint) return;
+    await applyCoords(selectedMapPoint.lat.toFixed(6), selectedMapPoint.lng.toFixed(6));
     closeMap();
   });
-
   document.getElementById("open-settings-modal").addEventListener("click", openSettings);
   document.getElementById("close-settings-modal").addEventListener("click", closeSettings);
   document.getElementById("save-google-settings").addEventListener("click", () => {
@@ -516,31 +619,23 @@
     state.settings.googleDriveFolderId = googleDriveInput.value.trim();
     saveState("saveGoogleSetting", { ...state.settings });
     closeSettings();
-    window.alert("Google settings saved.");
   });
-
-  window.addEventListener("storage", refreshAll);
+  document.getElementById("close-task-detail-modal").addEventListener("click", closeTaskDetailModal);
 
   clientMaster.addEventListener("change", () => toggleOtherField(clientMaster, clientMasterOther, "clientMasterOtherWrap", "client"));
   engineerMaster.addEventListener("change", () => toggleOtherField(engineerMaster, engineerMasterOther, "engineerMasterOtherWrap", "engineer"));
   categoryMaster.addEventListener("change", () => toggleOtherField(categoryMaster, categoryMasterOther, "categoryMasterOtherWrap", "category"));
   activityMaster.addEventListener("change", () => toggleOtherField(activityMaster, activityMasterOther, "activityMasterOtherWrap", "activity"));
+  window.addEventListener("storage", refreshAll);
 
   (async function init() {
     try {
       state.options.districts = await app.loadDistricts();
-      saveState("loadDistricts", { count: state.options.districts.length });
-    } catch (error) {
-      state.options.districts = state.options.districts.length ? state.options.districts : ["Bengaluru Urban"];
       app.writeState(state);
+    } catch (error) {
+      if (!state.options.districts.length) state.options.districts = ["Bengaluru Urban"];
     }
-    setOptions();
-    toggleOtherField(clientMaster, clientMasterOther, "clientMasterOtherWrap", "client");
-    toggleOtherField(engineerMaster, engineerMasterOther, "engineerMasterOtherWrap", "engineer");
-    toggleOtherField(categoryMaster, categoryMasterOther, "categoryMasterOtherWrap", "category");
-    toggleOtherField(activityMaster, activityMasterOther, "activityMasterOtherWrap", "activity");
     assignDate.value = new Date().toISOString().split("T")[0];
-    googleScriptInput.value = state.settings.googleScriptUrl || "";
     refreshAll();
   })();
 })();

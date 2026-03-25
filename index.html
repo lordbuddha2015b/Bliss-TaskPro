@@ -32,9 +32,7 @@
 
     <main class="main-panel">
       <header class="hero compact-hero">
-        <div class="brand-lockup hero-brand hero-brand-fixed">
-          <img class="brand-logo hero-logo" src="./Images/BlissTaskPro_Logo.png" alt="Bliss TaskPro logo">
-        </div>
+        <div class="hero-brand hero-brand-fixed"></div>
         <button id="open-settings-modal" class="icon-button" type="button" aria-label="Open settings">⚙</button>
       </header>
 
@@ -103,30 +101,25 @@
         <div class="section-header">
           <h3>Task Details</h3>
         </div>
-        <div class="grid-layout detail-grid">
-          <article class="panel">
-            <div class="responsive-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Status</th>
-                    <th>Site ID</th>
-                    <th>Engineer</th>
-                    <th>Site Engineer</th>
-                    <th>District</th>
-                    <th>Docs</th>
-                    <th>Photos</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="master-task-table"></tbody>
-              </table>
-            </div>
-          </article>
-          <article class="panel">
-            <div id="completed-detail-panel" class="detail-panel empty-state">Click a completed site ID to fetch and prepare share details.</div>
-          </article>
-        </div>
+        <article class="panel">
+          <div class="responsive-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Site ID</th>
+                  <th>Engineer</th>
+                  <th>Site Engineer</th>
+                  <th>District</th>
+                  <th>Docs</th>
+                  <th>Photos</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="master-task-table"></tbody>
+            </table>
+          </div>
+        </article>
       </section>
 
       <section class="stats-strip">
@@ -175,6 +168,16 @@
         <div class="fine-print">These settings are shared by Master and Engineer apps.</div>
         <button id="save-google-settings" class="primary-button" type="button">Save Settings</button>
       </div>
+    </div>
+  </div>
+
+  <div id="task-detail-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card modal-card-lg">
+      <div class="modal-header">
+        <h4>Task Details</h4>
+        <button type="button" id="close-task-detail-modal" class="secondary-button">Close</button>
+      </div>
+      <div id="task-detail-modal-content" class="detail-panel"></div>
     </div>
   </div>
 

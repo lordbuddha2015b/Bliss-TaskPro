@@ -24,7 +24,7 @@ function doPost(e) {
     const state = payload.state || {};
     const task = payload.payload || {};
 
-    const sheet = getSheet_();
+    const sheet = getSheet_(state.settings || {});
     ensureHeader_(sheet);
 
     const row = buildRow_({
@@ -36,7 +36,7 @@ function doPost(e) {
 
     sheet.appendRow(row);
 
-    const uploadedFiles = saveFilesToDrive_(task);
+    const uploadedFiles = saveFilesToDrive_(task, state.settings || {});
 
     return jsonOutput({
       ok: true,
@@ -80,8 +80,8 @@ function buildRow_(input) {
   ];
 }
 
-function saveFilesToDrive_(task) {
-  const folder = getDriveFolder_();
+function saveFilesToDrive_(task, settings) {
+  const folder = getDriveFolder_(settings);
   const saved = [];
   const groups = ['documents', 'photos', 'measurementImages'];
 
@@ -107,18 +107,20 @@ function saveFilesToDrive_(task) {
   return saved;
 }
 
-function getSheet_() {
-  if (!CONFIG.SHEET_ID || CONFIG.SHEET_ID.indexOf('PASTE_') === 0) {
+function getSheet_(settings) {
+  const sheetId = settings.googleSheetId || CONFIG.SHEET_ID;
+  if (!sheetId || sheetId.indexOf('PASTE_') === 0) {
     throw new Error('Please update CONFIG.SHEET_ID in code.gs');
   }
-  return SpreadsheetApp.openById(CONFIG.SHEET_ID).getSheets()[0];
+  return SpreadsheetApp.openById(sheetId).getSheets()[0];
 }
 
-function getDriveFolder_() {
-  if (!CONFIG.DRIVE_FOLDER_ID || CONFIG.DRIVE_FOLDER_ID.indexOf('PASTE_') === 0) {
+function getDriveFolder_(settings) {
+  const folderId = settings.googleDriveFolderId || CONFIG.DRIVE_FOLDER_ID;
+  if (!folderId || folderId.indexOf('PASTE_') === 0) {
     throw new Error('Please update CONFIG.DRIVE_FOLDER_ID in code.gs');
   }
-  return DriveApp.getFolderById(CONFIG.DRIVE_FOLDER_ID);
+  return DriveApp.getFolderById(folderId);
 }
 
 function ensureHeader_(sheet) {
