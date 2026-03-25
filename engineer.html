@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bliss TaskPro | Engineer App</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body data-app="engineer">
+  <div class="app-shell engineer-shell">
+    <aside class="sidebar">
+      <div>
+        <p class="eyebrow">Bliss TaskPro</p>
+        <h1>Engineer App</h1>
+        <p class="sidebar-copy">Assigned engineers can update progress, upload files, enter measurements, and capture GPS at completion.</p>
+      </div>
+      <div class="sidebar-card">
+        <span class="sidebar-card-label">Linked Master App</span>
+        <p>Task assignments and status colors stay synced with the master dashboard.</p>
+        <a class="link-button" href="./index.html">Open Master App</a>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Assigned Task Details</p>
+          <h2>Engineer work updates</h2>
+          <p>This page shows only the tasks filtered for the selected engineer.</p>
+        </div>
+        <div class="hero-stats">
+          <div class="stat-card"><span>Assigned</span><strong id="engineer-total-tasks">0</strong></div>
+          <div class="stat-card"><span>WIP</span><strong id="engineer-wip-tasks">0</strong></div>
+          <div class="stat-card"><span>Completed</span><strong id="engineer-completed-tasks">0</strong></div>
+        </div>
+      </header>
+
+      <section class="page-section active">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Engineer View</p>
+            <h3>Task Details</h3>
+          </div>
+          <p class="section-copy">Select an engineer to show only their assigned tasks.</p>
+        </div>
+        <div class="grid-layout two-column">
+          <article class="panel compact-panel">
+            <h4>Engineer Filter</h4>
+            <label><span>Engineer Name</span><select id="engineer-view-select"></select></label>
+          </article>
+          <article class="panel compact-panel">
+            <h4>Status Guide</h4>
+            <div class="legend-row">
+              <span class="status-pill status-pending">Pending</span>
+              <span class="status-pill status-wip">WIP</span>
+              <span class="status-pill status-completed">Completed</span>
+            </div>
+          </article>
+        </div>
+        <div id="engineer-task-list" class="engineer-task-grid"></div>
+      </section>
+    </main>
+  </div>
+  <script src="./shared.js"></script>
+  <script src="./engineer.js"></script>
+</body>
+</html>

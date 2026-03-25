@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bliss TaskPro | Master App</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body data-app="master">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div>
+        <p class="eyebrow">Bliss TaskPro</p>
+        <h1>Master App</h1>
+        <p class="sidebar-copy">Create Site IDs, assign engineers, and monitor field progress from one responsive dashboard.</p>
+      </div>
+      <nav class="sidebar-nav">
+        <button class="nav-chip active" data-page-target="master-page">Master</button>
+        <button class="nav-chip" data-page-target="task-page">Task</button>
+        <button class="nav-chip" data-page-target="details-page">Task Details</button>
+      </nav>
+      <div class="sidebar-card">
+        <span class="sidebar-card-label">Engineer App</span>
+        <p>Open the linked engineer view for assigned task updates.</p>
+        <a class="link-button" href="./engineer.html">Go To Engineer App</a>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Field Task Monitoring</p>
+          <h2>Track site work from assignment to completion</h2>
+          <p>Tasks start in gray, switch to orange in WIP, and become green after engineer completion with GPS capture.</p>
+        </div>
+        <div class="hero-stats">
+          <div class="stat-card"><span>Total Tasks</span><strong id="master-total-tasks">0</strong></div>
+          <div class="stat-card"><span>WIP Tasks</span><strong id="master-wip-tasks">0</strong></div>
+          <div class="stat-card"><span>Completed</span><strong id="master-completed-tasks">0</strong></div>
+        </div>
+      </header>
+
+      <section id="master-page" class="page-section active">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Page A</p>
+            <h3>Master</h3>
+          </div>
+          <p class="section-copy">Select the task creation details based on your reference sheet.</p>
+        </div>
+        <div class="grid-layout two-column">
+          <article class="panel">
+            <h4>Create Site ID Template</h4>
+            <form id="master-filter-form" class="form-grid">
+              <label><span>Client</span><select id="clientMaster" name="client" required></select></label>
+              <label><span>Engineer</span><select id="engineerMaster" name="engineer" required></select></label>
+              <label><span>Category</span><select id="categoryMaster" name="category" required></select></label>
+              <label><span>Activity</span><select id="activityMaster" name="activity" required></select></label>
+              <label><span>Site ID</span><input type="text" id="siteIdMaster" name="siteId" placeholder="Enter unique Site ID" required></label>
+              <label><span>Site Name</span><input type="text" id="siteNameMaster" name="siteName" placeholder="Site name / tower / office" required></label>
+              <label class="full-span"><span>Task Summary</span><textarea id="summaryMaster" name="summary" rows="3" placeholder="Short task description"></textarea></label>
+              <div class="form-actions full-span"><button type="submit" class="primary-button">Save Draft For Assignment</button></div>
+            </form>
+          </article>
+          <article class="panel">
+            <h4>Saved Drafts</h4>
+            <div id="draft-list" class="stack-list empty-state-host"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="task-page" class="page-section">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Page B</p>
+            <h3>Task</h3>
+          </div>
+          <p class="section-copy">Assign the site to the engineer with date and location details.</p>
+        </div>
+        <div class="grid-layout two-column">
+          <article class="panel">
+            <h4>Task Assignment</h4>
+            <form id="task-assignment-form" class="form-grid">
+              <label><span>Client</span><select id="assignClient" name="client" required></select></label>
+              <label><span>Engineer</span><select id="assignEngineer" name="engineer" required></select></label>
+              <label><span>Category</span><select id="assignCategory" name="category" required></select></label>
+              <label><span>Activity</span><select id="assignActivity" name="activity" required></select></label>
+              <label><span>Date</span><input type="date" id="assignDate" name="date" required></label>
+              <label><span>Site ID</span><input type="text" id="assignSiteId" name="siteId" placeholder="Main task code" required></label>
+              <label><span>Location</span><input type="text" id="assignLocation" name="location" placeholder="City / Area / Landmark" required></label>
+              <label><span>District</span><select id="assignDistrict" name="district" required></select></label>
+              <label class="full-span"><span>Instructions</span><textarea id="assignInstructions" name="instructions" rows="4" placeholder="Assignment notes, safety instructions, or document requirements"></textarea></label>
+              <div class="form-actions full-span"><button type="submit" class="primary-button">Assign Task To Engineer</button></div>
+            </form>
+          </article>
+          <article class="panel">
+            <h4>Assignment Queue</h4>
+            <div id="queue-list" class="stack-list empty-state-host"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="details-page" class="page-section">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Page C</p>
+            <h3>Task Details</h3>
+          </div>
+          <p class="section-copy">Live monitor every field task, engineer document uploads, and completion location.</p>
+        </div>
+        <article class="panel">
+          <div class="table-actions">
+            <label class="search-field">
+              <span>Search</span>
+              <input id="task-search" type="search" placeholder="Search by Site ID, engineer, client or district">
+            </label>
+          </div>
+          <div class="responsive-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th><th>Site ID</th><th>Engineer</th><th>Client</th><th>Category</th><th>Activity</th><th>Documents</th><th>Photos</th><th>Measurement</th><th>GPS</th>
+                </tr>
+              </thead>
+              <tbody id="master-task-table"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+  <script src="./shared.js"></script>
+  <script src="./master.js"></script>
+</body>
+</html>
