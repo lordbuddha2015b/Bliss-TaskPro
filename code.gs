@@ -273,10 +273,16 @@ function loginUser_(settings, payload) {
   ensureCredentialSheet_(sheet);
   const values = sheet.getDataRange().getValues();
   const rows = values.slice(1);
+  const requestedRole = String(payload.role || '').toLowerCase();
   const user = rows.find(function(row) {
-    return String(row[0] || '').trim() === String(payload.userId || '').trim()
+    const rowUserId = String(row[0] || '').trim();
+    const rowRole = String(row[2] || '').trim().toLowerCase();
+    const isMasterRow = rowRole === 'master' || rowRole.indexOf('master') >= 0;
+    const roleMatches = requestedRole === 'master' ? isMasterRow : !isMasterRow;
+
+    return rowUserId === String(payload.userId || '').trim()
       && String(row[1] || '') === String(payload.password || '')
-      && String(row[2] || '').toLowerCase() === String(payload.role || '').toLowerCase()
+      && roleMatches
       && String(row[4] || 'ACTIVE').toUpperCase() !== 'INACTIVE';
   });
 
