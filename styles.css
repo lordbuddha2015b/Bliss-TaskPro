@@ -290,6 +290,18 @@ textarea {
   background: rgba(75, 67, 118, 0.08);
 }
 
+.compact-actions .secondary-button,
+.compact-actions .frozen-chip,
+.compact-actions .icon-button {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff7fb;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.compact-actions .frozen-chip {
+  font-weight: 800;
+}
+
 .form-actions {
   display: flex;
   justify-content: flex-end;

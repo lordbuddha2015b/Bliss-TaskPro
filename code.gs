@@ -276,12 +276,14 @@ function loginUser_(settings, payload) {
   const requestedRole = String(payload.role || '').toLowerCase();
   const user = rows.find(function(row) {
     const rowUserId = String(row[0] || '').trim();
+    const rowPassword = String(row[1] || '').trim();
     const rowRole = String(row[2] || '').trim().toLowerCase();
     const isMasterRow = rowRole === 'master' || rowRole.indexOf('master') >= 0;
     const roleMatches = requestedRole === 'master' ? isMasterRow : !isMasterRow;
+    const inputPassword = String(payload.password || '').trim();
 
     return rowUserId === String(payload.userId || '').trim()
-      && String(row[1] || '') === String(payload.password || '')
+      && rowPassword === inputPassword
       && roleMatches
       && String(row[4] || 'ACTIVE').toUpperCase() !== 'INACTIVE';
   });

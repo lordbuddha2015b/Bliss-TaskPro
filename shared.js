@@ -1,5 +1,6 @@
 (function () {
   const STORAGE_KEY = "bliss-taskpro-state-v2";
+  const SETTINGS_KEY = "bliss-taskpro-settings-v1";
   const MASTER_SESSION_KEY = "bliss-taskpro-master-session";
   const ENGINEER_SESSION_KEY = "bliss-taskpro-engineer-session";
 
@@ -35,8 +36,10 @@
 
   function readState() {
     const raw = localStorage.getItem(STORAGE_KEY);
+    const storedSettings = readSettings();
     if (!raw) {
       const clean = cloneDefaults();
+      clean.settings = normalizeSettings(storedSettings, clean.settings);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
       return clean;
     }
@@ -46,7 +49,7 @@
       const base = cloneDefaults();
       return {
         options: { ...base.options, ...(parsed.options || {}) },
-        settings: normalizeSettings(parsed.settings, base.settings),
+        settings: normalizeSettings(storedSettings || parsed.settings, base.settings),
         drafts: Array.isArray(parsed.drafts) ? parsed.drafts : [],
         tasks: Array.isArray(parsed.tasks) ? parsed.tasks : []
       };
@@ -58,8 +61,23 @@
   }
 
   function writeState(state) {
+    writeSettings(state.settings);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     return state;
+  }
+
+  function readSettings() {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function writeSettings(settings) {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }
 
   function uid(prefix) {
