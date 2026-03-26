@@ -272,27 +272,48 @@ function ensureHeadersAndStyle_(sheet, headers, headerColor, bandColor) {
 
 function loginUser_(settings, payload) {
   const requestedRole = String(payload.role || '').toLowerCase();
-  const sheet = getCredentialSheet_(settings, requestedRole);
+  const spreadsheet = getSpreadsheet_(settings);
+  const sheetName = requestedRole === 'master' ? SHEET_NAMES.masterCredential : SHEET_NAMES.engineerCredential;
+  const sheet = spreadsheet.getSheetByName(sheetName);
+  if (!sheet) {
+    return { ok: false, message: 'Credential sheet not found: ' + sheetName };
+  }
   ensureCredentialSheet_(sheet);
   const values = sheet.getDataRange().getValues();
+  if (values.length <= 1) {
+    return { ok: false, message: 'Credential sheet is empty: ' + sheetName };
+  }
   const rows = values.slice(1);
+  const inputUserId = String(payload.userId || '').trim().toLowerCase();
+  const inputPassword = String(payload.password || '').trim();
+  const matchingUser = rows.find(function(row) {
+    return String(row[0] || '').trim().toLowerCase() === inputUserId;
+  });
+  if (!matchingUser) {
+    return { ok: false, message: 'User ID not found in ' + sheetName + ': ' + payload.userId };
+  }
+  const rowPassword = String(matchingUser[1] || '').trim();
+  if (rowPassword !== inputPassword) {
+    return { ok: false, message: 'Password mismatch for user ID: ' + payload.userId };
+  }
+  const status = String(matchingUser[4] || 'ACTIVE').toUpperCase();
+  if (status === 'INACTIVE') {
+    return { ok: false, message: 'User is inactive: ' + payload.userId };
+  }
   const user = rows.find(function(row) {
     const rowUserId = String(row[0] || '').trim().toLowerCase();
-    const rowPassword = String(row[1] || '').trim();
     const rowRole = String(row[2] || '').trim().toLowerCase();
     const isMasterRow = rowRole === 'master' || rowRole.indexOf('master') >= 0;
     const roleMatches = requestedRole === 'master' ? isMasterRow : !isMasterRow;
-    const inputPassword = String(payload.password || '').trim();
-    const inputUserId = String(payload.userId || '').trim().toLowerCase();
 
     return rowUserId === inputUserId
-      && rowPassword === inputPassword
+      && String(row[1] || '').trim() === inputPassword
       && roleMatches
       && String(row[4] || 'ACTIVE').toUpperCase() !== 'INACTIVE';
   });
 
   if (!user) {
-    return { ok: false, message: 'Invalid user ID or password.' };
+    return { ok: false, message: 'Role mismatch in ' + sheetName + ' for user ID: ' + payload.userId };
   }
 
   return {

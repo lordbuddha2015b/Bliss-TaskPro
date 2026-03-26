@@ -493,6 +493,17 @@ tbody td {
   text-align: center;
 }
 
+.login-debug {
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(174, 68, 90, 0.12);
+  border: 1px solid rgba(174, 68, 90, 0.25);
+  color: #7c2337;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
 .modal {
   position: fixed;
   inset: 0;

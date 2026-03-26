@@ -41,6 +41,7 @@
   function showMasterApp() {
     masterLoginScreen.classList.add("hidden");
     masterAppShell.classList.remove("hidden");
+    document.getElementById("master-login-debug").classList.add("hidden");
   }
 
   function showMasterLogin() {
@@ -645,14 +646,17 @@
   document.getElementById("close-task-detail-modal").addEventListener("click", closeTaskDetailModal);
   document.getElementById("master-login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
+    const debug = document.getElementById("master-login-debug");
     const settings = state.settings.master;
     const userId = document.getElementById("master-login-user").value.trim();
     const password = document.getElementById("master-login-password").value;
     const result = await app.loginWithGoogle(settings, "master", userId, password);
     if (!result.ok) {
-      window.alert(result.message || "Login failed.");
+      debug.textContent = result.message || "Login failed.";
+      debug.classList.remove("hidden");
       return;
     }
+    debug.classList.add("hidden");
     masterSession = {
       userId: result.user.userId,
       name: result.user.name || result.user.userId,

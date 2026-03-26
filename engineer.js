@@ -424,13 +424,16 @@
 
   document.getElementById("engineer-login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
+    const debug = document.getElementById("engineer-login-debug");
     const userId = engineerLoginUser.value.trim();
     const password = engineerLoginPassword.value;
     const result = await app.loginWithGoogle(state.settings.engineer, "engineer", userId, password);
     if (!result.ok) {
-      window.alert(result.message || "Login failed.");
+      debug.textContent = result.message || "Login failed.";
+      debug.classList.remove("hidden");
       return;
     }
+    debug.classList.add("hidden");
     currentEngineer = result.user.name || result.user.userId;
     engineerUserId = result.user.userId || "";
     app.saveEngineerSession(currentEngineer);
