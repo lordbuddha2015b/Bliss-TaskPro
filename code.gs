@@ -275,14 +275,15 @@ function loginUser_(settings, payload) {
   const rows = values.slice(1);
   const requestedRole = String(payload.role || '').toLowerCase();
   const user = rows.find(function(row) {
-    const rowUserId = String(row[0] || '').trim();
+    const rowUserId = String(row[0] || '').trim().toLowerCase();
     const rowPassword = String(row[1] || '').trim();
     const rowRole = String(row[2] || '').trim().toLowerCase();
     const isMasterRow = rowRole === 'master' || rowRole.indexOf('master') >= 0;
-    const roleMatches = requestedRole === 'master' ? isMasterRow : !isMasterRow;
+    const roleMatches = requestedRole === 'master' ? isMasterRow : true;
     const inputPassword = String(payload.password || '').trim();
+    const inputUserId = String(payload.userId || '').trim().toLowerCase();
 
-    return rowUserId === String(payload.userId || '').trim()
+    return rowUserId === inputUserId
       && rowPassword === inputPassword
       && roleMatches
       && String(row[4] || 'ACTIVE').toUpperCase() !== 'INACTIVE';

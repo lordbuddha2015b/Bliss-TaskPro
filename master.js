@@ -41,7 +41,6 @@
   function showMasterApp() {
     masterLoginScreen.classList.add("hidden");
     masterAppShell.classList.remove("hidden");
-    document.getElementById("logged-in-master").textContent = masterSession?.name || masterSession?.userId || "Master";
   }
 
   function showMasterLogin() {

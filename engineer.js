@@ -398,7 +398,6 @@
   function showApp() {
     loginScreen.classList.add("hidden");
     appShell.classList.remove("hidden");
-    document.getElementById("logged-in-engineer").textContent = currentEngineer;
     engineerGoogleScriptInput.value = state.settings.engineer.googleScriptUrl || "";
     engineerGoogleSheetInput.value = state.settings.engineer.googleSheetId || "";
     engineerGoogleDocumentDriveInput.value = state.settings.engineer.googleDocumentFolderId || "";
