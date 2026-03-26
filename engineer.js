@@ -82,9 +82,14 @@
   function fileListMarkup(items, removeAction, editable) {
     if (!items.length) return "<li>No files added.</li>";
     return items.map((item, index) => `
-      <li>
-        ${app.escapeHtml(item.storedName || item.name || `File ${index + 1}`)}
-        ${editable ? `<button class="mini-button" type="button" data-remove="${removeAction}" data-file-id="${item.id}">Remove</button>` : ""}
+      <li class="file-card-item">
+        <div class="preview-card">
+          ${isImageFile(item) && (item.previewUrl || item.thumbnailUrl)
+            ? `<img class="photo-preview" src="${item.previewUrl || item.thumbnailUrl}" alt="${app.escapeHtml(item.storedName || item.name || `File ${index + 1}`)}">`
+            : `<span class="frozen-chip">${app.escapeHtml(item.docType || "File")}</span>`}
+          <span class="preview-name">${app.escapeHtml(item.storedName || item.name || `File ${index + 1}`)}</span>
+          ${editable ? `<button class="mini-button" type="button" data-remove="${removeAction}" data-file-id="${item.id}">Remove</button>` : ""}
+        </div>
       </li>
     `).join("");
   }
@@ -93,10 +98,18 @@
     if (!items.length) return '<span class="fine-print">No photos added.</span>';
     return items.map((item) => `
       <div class="preview-card">
-        ${item.previewUrl ? `<img class="photo-preview" src="${item.previewUrl}" alt="${app.escapeHtml(item.storedName)}">` : `<span class="frozen-chip">${app.escapeHtml(item.storedName)}</span>`}
+        ${item.previewUrl || item.thumbnailUrl ? `<img class="photo-preview" src="${item.previewUrl || item.thumbnailUrl}" alt="${app.escapeHtml(item.storedName)}">` : `<span class="frozen-chip">${app.escapeHtml(item.storedName)}</span>`}
+        <span class="preview-name">${app.escapeHtml(item.storedName || item.name || "Photo")}</span>
         ${editable ? `<button class="mini-button" type="button" data-remove="${removeAction}" data-file-id="${item.id}">Remove</button>` : ""}
       </div>
     `).join("");
+  }
+
+  function isImageFile(item) {
+    const fileType = String(item?.type || item?.mimeType || "").toLowerCase();
+    const fileName = String(item?.storedName || item?.name || "").toLowerCase();
+    return fileType.startsWith("image/")
+      || /\.(png|jpe?g|gif|bmp|webp|svg)$/.test(fileName);
   }
 
   function renderTaskDetail(taskId, documentAnswerOverride) {
@@ -117,9 +130,10 @@
       <div class="detail-panel" data-task-id="${task.id}">
         <div class="task-hero">
           <div class="task-hero-main">
-            <h4>${app.escapeHtml(task.siteId)}</h4>
-            <p class="task-hero-client">${app.escapeHtml(task.client)}</p>
-            <p class="meta-line">${app.escapeHtml(task.category)} | ${app.escapeHtml(task.activity)}</p>
+            <h4>Site ID: ${app.escapeHtml(task.siteId)}</h4>
+            <p class="task-hero-client">Client: ${app.escapeHtml(task.client)}</p>
+            <p class="meta-line"><strong>Category:</strong> ${app.escapeHtml(task.category)}</p>
+            <p class="meta-line"><strong>Activity:</strong> ${app.escapeHtml(task.activity)}</p>
           </div>
           <div class="task-hero-side">
             <p><strong>Date:</strong> ${app.formatDate(task.date)}</p>
@@ -326,6 +340,11 @@
     const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
     const coords = await getCurrentCoords();
     const next = await app.enrichFilesWithContent(task.siteId, files, coords || {});
+    next.forEach((file) => {
+      file.storedName = coords
+        ? `${task.siteId}_${coords.latitude}_${coords.longitude}_${file.originalName}`
+        : `${task.siteId}_${file.originalName}`;
+    });
     updateTask(taskId, (taskItem) => {
       taskItem.photos = taskItem.photos.concat(next);
     }, "addPhotos");

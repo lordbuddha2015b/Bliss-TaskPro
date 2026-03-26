@@ -492,6 +492,14 @@ tbody td {
 .preview-card {
   display: grid;
   gap: 8px;
+  justify-items: start;
+  max-width: 132px;
+}
+
+.preview-name {
+  font-size: 0.82rem;
+  color: var(--muted);
+  word-break: break-word;
 }
 
 .photo-preview {

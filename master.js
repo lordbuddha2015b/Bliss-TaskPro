@@ -220,12 +220,33 @@
     };
   }
 
-  function exportTaskPdf(task, share) {
+  async function toDataUrl(url) {
+    if (!url) return "";
+    if (String(url).startsWith("data:")) return String(url);
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(String(reader.result || ""));
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      return "";
+    }
+  }
+
+  async function exportTaskPdf(task, share, remote = null) {
     const jsPDF = window.jspdf?.jsPDF;
     if (!jsPDF) return;
     const pdf = new jsPDF();
     const selectedDocs = task.documents.filter((item) => share.selectedDocuments.includes(item.id));
     const selectedPhotos = task.photos.filter((item) => share.selectedPhotos.includes(item.id));
+    const selectedDocNames = selectedDocs.map((item) => item.storedName);
+    const selectedPhotoNames = selectedPhotos.map((item) => item.storedName);
+    const remoteDocuments = (remote?.documents || []).filter((item) => selectedDocNames.includes(item.name));
+    const remotePhotos = (remote?.photos || []).filter((item) => selectedPhotoNames.includes(item.name));
     let y = 18;
 
     function line(text) {
@@ -236,6 +257,70 @@
         pdf.addPage();
         y = 18;
       }
+    }
+
+    function ensureImageRoom(height = 72) {
+      if (y + height > 270) {
+        pdf.addPage();
+        y = 18;
+      }
+    }
+
+    function link(text, url) {
+      const lines = pdf.splitTextToSize(String(text), 175);
+      const startY = y;
+      pdf.setTextColor(0, 102, 204);
+      pdf.textWithLink(lines[0], 16, y, { url });
+      if (lines.length > 1) {
+        for (let i = 1; i < lines.length; i += 1) {
+          y += 7;
+          pdf.text(lines[i], 16, y);
+        }
+      }
+      pdf.setTextColor(0, 0, 0);
+      y = startY + lines.length * 7;
+      if (y > 270) {
+        pdf.addPage();
+        y = 18;
+      }
+    }
+
+    async function addImageBlock(title, items, remoteItems) {
+      if (!items.length) {
+        line(`${title}: -`);
+        return;
+      }
+      line(title);
+      for (const item of items) {
+        const remoteMatch = remoteItems.find((remoteItem) => remoteItem.name === item.storedName);
+        const dataUrl = item.previewUrl || item.thumbnailUrl || remoteMatch?.thumbnailUrl ? await toDataUrl(item.previewUrl || item.thumbnailUrl || remoteMatch?.thumbnailUrl) : "";
+        line(item.storedName || item.name || title);
+        if (!dataUrl || !/^data:image\//.test(dataUrl)) continue;
+        ensureImageRoom();
+        try {
+          const format = dataUrl.includes("image/png") ? "PNG" : "JPEG";
+          pdf.addImage(dataUrl, format, 16, y, 58, 58);
+          y += 64;
+        } catch (error) {
+          line("Preview unavailable in PDF");
+        }
+      }
+    }
+
+    function addDriveLinksBlock(title, items, remoteItems) {
+      if (!items.length) {
+        line(`${title} Links: -`);
+        return;
+      }
+      line(`${title} Links`);
+      items.forEach((item) => {
+        const remoteMatch = remoteItems.find((remoteItem) => remoteItem.name === item.storedName);
+        if (!remoteMatch?.url) {
+          line(`${item.storedName || item.name || title}: Link unavailable`);
+          return;
+        }
+        link(item.storedName || item.name || title, remoteMatch.url);
+      });
     }
 
     pdf.setFontSize(18);
@@ -255,9 +340,13 @@
     if (share.includeInstructions) line(`Instructions: ${task.instructions || "-"}`);
     if (share.includeMeasurement) line(`Measurement: ${task.measurementText || "-"}`);
     if (share.includeGps) line(`GPS: ${task.gps ? `${task.gps.latitude}, ${task.gps.longitude}` : "-"}`);
-    if (share.includeMeasurementImages) line(`Measurement Images: ${task.measurementImages.map((item) => item.storedName).join(", ") || "-"}`);
-    line(`Documents: ${selectedDocs.map((item) => item.storedName).join(", ") || "-"}`);
-    line(`Photos: ${selectedPhotos.map((item) => item.storedName).join(", ") || "-"}`);
+    if (share.includeMeasurementImages) {
+      await addImageBlock("Measurement Images", task.measurementImages, []);
+    }
+    await addImageBlock("Documents", selectedDocs, remoteDocuments);
+    await addImageBlock("Photos", selectedPhotos, remotePhotos);
+    addDriveLinksBlock("Documents", selectedDocs, remoteDocuments);
+    addDriveLinksBlock("Photos", selectedPhotos, remotePhotos);
     pdf.save(`${task.siteId}_summary.pdf`);
   }
 
@@ -311,7 +400,12 @@
               `).join("")
               : '<span class="fine-print">No uploaded documents.</span>'}
           </div>
-          <ul class="file-list">${(remoteDocuments.length ? remoteDocuments : task.documents.filter((item) => item.answer === "Yes")).map((item) => `<li>${app.escapeHtml(item.name || item.storedName)}</li>`).join("") || "<li>No uploaded documents.</li>"}</ul>
+          <div class="photo-preview-grid">${(remoteDocuments.length ? remoteDocuments : task.documents.filter((item) => item.answer === "Yes")).map((item, index) => `
+            <div class="preview-card">
+              ${(item.thumbnailUrl || item.previewUrl) ? `<img class="photo-preview" src="${item.thumbnailUrl || item.previewUrl}" alt="${app.escapeHtml(item.name || item.storedName || `Document ${index + 1}`)}">` : `<span class="frozen-chip">${app.escapeHtml(item.docType || "Document")}</span>`}
+              <span class="preview-name">${app.escapeHtml(item.name || item.storedName || `Document ${index + 1}`)}</span>
+            </div>
+          `).join("") || '<span class="fine-print">No uploaded documents.</span>'}</div>
         </div>
 
         <div>
@@ -321,7 +415,12 @@
               ? task.photos.map((item, index) => `<label><input type="checkbox" data-photo-id="${item.id}" ${share.selectedPhotos.includes(item.id) ? "checked" : ""}>Photo ${index + 1}</label>`).join("")
               : '<span class="fine-print">No uploaded photos.</span>'}
           </div>
-          <div class="photo-preview-grid">${(remotePhotos.length ? remotePhotos : task.photos).map((item) => item.thumbnailUrl || item.previewUrl ? `<img class="photo-preview" src="${item.thumbnailUrl || item.previewUrl}" alt="${app.escapeHtml(item.name || item.storedName)}">` : `<span class="frozen-chip">${app.escapeHtml(item.name || item.storedName)}</span>`).join("") || '<span class="fine-print">No uploaded photos.</span>'}</div>
+          <div class="photo-preview-grid">${(remotePhotos.length ? remotePhotos : task.photos).map((item, index) => `
+            <div class="preview-card">
+              ${(item.thumbnailUrl || item.previewUrl) ? `<img class="photo-preview" src="${item.thumbnailUrl || item.previewUrl}" alt="${app.escapeHtml(item.name || item.storedName || `Photo ${index + 1}`)}">` : `<span class="frozen-chip">${app.escapeHtml(item.name || item.storedName || `Photo ${index + 1}`)}</span>`}
+              <span class="preview-name">${app.escapeHtml(item.name || item.storedName || `Photo ${index + 1}`)}</span>
+            </div>
+          `).join("") || '<span class="fine-print">No uploaded photos.</span>'}</div>
         </div>
 
         <div class="check-grid">
@@ -361,10 +460,10 @@
       openTaskDetailModal(task.id);
     });
 
-    document.getElementById("download-share-pdf").addEventListener("click", () => {
+    document.getElementById("download-share-pdf").addEventListener("click", async () => {
       task.sharePackage = collectSharePackage(task.id);
       saveState("exportSharePdf", { taskId: task.id, sharePackage: task.sharePackage });
-      exportTaskPdf(task, task.sharePackage);
+      await exportTaskPdf(task, task.sharePackage, remote);
     });
 
     if (task.status === "Completed") {

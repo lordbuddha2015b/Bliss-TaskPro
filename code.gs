@@ -208,8 +208,8 @@ function getTaskSnapshot_(params) {
     ok: true,
     siteId: siteId,
     latestRow: latest ? mapRow_(header, latest) : null,
-    documents: listFilesByPrefix_(getDocumentFolder_(settings), siteId + '_'),
-    photos: listFilesByPrefix_(getPhotoFolder_(settings), siteId + '_')
+    documents: listFilesBySiteId_(getDocumentFolder_(settings), siteId),
+    photos: listFilesBySiteId_(getPhotoFolder_(settings), siteId)
   };
 }
 
@@ -221,16 +221,21 @@ function mapRow_(header, row) {
   return out;
 }
 
-function listFilesByPrefix_(folder, prefix) {
+function listFilesBySiteId_(folder, siteId) {
   const files = folder.getFiles();
   const results = [];
+  const token = '_' + String(siteId) + '_';
   while (files.hasNext()) {
     const file = files.next();
-    if (String(file.getName()).indexOf(prefix) !== 0) continue;
+    const name = String(file.getName());
+    const startsWithSiteId = name.indexOf(String(siteId) + '_') === 0;
+    const containsSiteIdToken = name.indexOf(token) >= 0;
+    if (!startsWithSiteId && !containsSiteIdToken) continue;
     results.push({
       id: file.getId(),
-      name: file.getName(),
+      name: name,
       url: file.getUrl(),
+      mimeType: file.getMimeType(),
       thumbnailUrl: 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w400'
     });
   }
