@@ -4,6 +4,7 @@
   let selectedDraftId = "";
   let selectedMapPoint = null;
   let currentEditTaskId = "";
+  let currentOpenTaskId = "";
   let masterSession = app.getMasterSession();
   let map;
   let mapMarker;
@@ -243,30 +244,60 @@
     const pdf = new jsPDF();
     const selectedDocs = task.documents.filter((item) => share.selectedDocuments.includes(item.id));
     const selectedPhotos = task.photos.filter((item) => share.selectedPhotos.includes(item.id));
-    const selectedDocNames = selectedDocs.map((item) => item.storedName);
-    const selectedPhotoNames = selectedPhotos.map((item) => item.storedName);
-    const remoteDocuments = (remote?.documents || []).filter((item) => selectedDocNames.includes(item.name));
-    const remotePhotos = (remote?.photos || []).filter((item) => selectedPhotoNames.includes(item.name));
+    const remoteDocuments = remote?.documents || [];
+    const remotePhotos = remote?.photos || [];
+    const exportDocuments = mergeExportItems(selectedDocs, remoteDocuments);
+    const exportPhotos = mergeExportItems(selectedPhotos, remotePhotos);
+    const exportMeasurementImages = mergeExportItems(task.measurementImages || [], remote?.measurementImages || []);
     let y = 18;
 
-    function line(text) {
+    const pageWidth = pdf.internal.pageSize.getWidth();
+
+    const watermarkData = await toDataUrl("./Images/BlissTaskPro_Logo.png");
+
+    function drawWatermark() {
+      if (!watermarkData) return;
+      try {
+        if (typeof pdf.GState === "function" && typeof pdf.setGState === "function") {
+          pdf.setGState(new pdf.GState({ opacity: 0.08 }));
+        }
+        pdf.addImage(watermarkData, "PNG", pageWidth / 2 - 45, 95, 90, 90);
+        if (typeof pdf.GState === "function" && typeof pdf.setGState === "function") {
+          pdf.setGState(new pdf.GState({ opacity: 1 }));
+        }
+      } catch (error) {}
+    }
+
+    function line(text, x = 16) {
       const lines = pdf.splitTextToSize(String(text), 175);
-      pdf.text(lines, 16, y);
+      pdf.text(lines, x, y);
       y += lines.length * 7;
       if (y > 270) {
         pdf.addPage();
+        drawWatermark();
         y = 18;
       }
     }
 
-    function ensureImageRoom(height = 72) {
+    function ensureSpace(height = 20) {
       if (y + height > 270) {
         pdf.addPage();
+        drawWatermark();
         y = 18;
       }
+    }
+
+    function sectionTitle(title) {
+      ensureSpace(18);
+      pdf.setFontSize(14);
+      pdf.setFont(undefined, "bold");
+      line(title);
+      pdf.setFontSize(11);
+      pdf.setFont(undefined, "normal");
     }
 
     function link(text, url) {
+      ensureSpace(12);
       const lines = pdf.splitTextToSize(String(text), 175);
       const startY = y;
       pdf.setTextColor(0, 102, 204);
@@ -281,76 +312,115 @@
       y = startY + lines.length * 7;
       if (y > 270) {
         pdf.addPage();
+        drawWatermark();
         y = 18;
       }
     }
 
-    async function addImageBlock(title, items, remoteItems) {
+    function addLinksBlock(title, items) {
       if (!items.length) {
-        line(`${title}: -`);
+        sectionTitle(title);
+        line("No links available.");
         return;
       }
-      line(title);
+      sectionTitle(title);
       for (const item of items) {
-        const remoteMatch = remoteItems.find((remoteItem) => remoteItem.name === item.storedName);
-        const dataUrl = item.previewUrl || item.thumbnailUrl || remoteMatch?.thumbnailUrl ? await toDataUrl(item.previewUrl || item.thumbnailUrl || remoteMatch?.thumbnailUrl) : "";
-        line(item.storedName || item.name || title);
-        if (!dataUrl || !/^data:image\//.test(dataUrl)) continue;
-        ensureImageRoom();
-        try {
-          const format = dataUrl.includes("image/png") ? "PNG" : "JPEG";
-          pdf.addImage(dataUrl, format, 16, y, 58, 58);
-          y += 64;
-        } catch (error) {
-          line("Preview unavailable in PDF");
-        }
-      }
-    }
-
-    function addDriveLinksBlock(title, items, remoteItems) {
-      if (!items.length) {
-        line(`${title} Links: -`);
-        return;
-      }
-      line(`${title} Links`);
-      items.forEach((item) => {
-        const remoteMatch = remoteItems.find((remoteItem) => remoteItem.name === item.storedName);
-        if (!remoteMatch?.url) {
-          line(`${item.storedName || item.name || title}: Link unavailable`);
+        const fileName = item.storedName || item.name || title;
+        if (!item?.url) {
+          line(`${fileName}: Link unavailable`);
           return;
         }
-        link(item.storedName || item.name || title, remoteMatch.url);
-      });
+        link(fileName, item.url);
+      }
     }
 
-    pdf.setFontSize(18);
-    line(`Bliss TaskPro - ${task.siteId}`);
+    drawWatermark();
+    pdf.setFont("times", "bolditalic");
+    pdf.setFontSize(30);
+    pdf.text("Bliss TaskPro", pageWidth / 2, y, { align: "center" });
+    y += 16;
     pdf.setFontSize(11);
+    pdf.setFont("helvetica", "normal");
+    sectionTitle("Site Details");
+    line(`Site ID: ${task.siteId}`);
     line(`Client: ${task.client}`);
-    line(`Engineer: ${task.engineer}`);
-    line(`Site Engineer: ${task.siteEngineerName || "-"}`);
-    line(`Status: ${task.status}`);
+    line(`Category: ${task.category}`);
+    line(`Activity: ${task.activity}`);
+    y -= 28;
+    line(`Engineer: ${task.engineer}`, 112);
+    line(`Site Engineer: ${task.siteEngineerName || "-"}`, 112);
+    line(`Status: ${task.status}`, 112);
+    y += 7;
+    sectionTitle("Task Info");
+    const infoStartY = y;
     line(`Date: ${app.formatDate(task.date)}`);
     line(`District: ${task.district || "-"}`);
     line(`Location: ${task.location}`);
-    line(`WO: ${share.workOrder}`);
-    line(`Billing Status: ${share.billingStatus}`);
-    line(`Invoice Number: ${share.invoiceNumber}`);
-    line(`Value: ${share.value}`);
-    if (share.includeInstructions) line(`Instructions: ${task.instructions || "-"}`);
-    if (share.includeMeasurement) line(`Measurement: ${task.measurementText || "-"}`);
-    if (share.includeGps) line(`GPS: ${task.gps ? `${task.gps.latitude}, ${task.gps.longitude}` : "-"}`);
-    if (share.includeMeasurementImages) {
-      await addImageBlock("Measurement Images", task.measurementImages, []);
+    const afterTaskInfoY = y;
+    y = infoStartY;
+    pdf.setFontSize(14);
+    pdf.setFont(undefined, "bold");
+    line("Billing", 112);
+    pdf.setFontSize(11);
+    pdf.setFont(undefined, "normal");
+    line(`WO: ${share.workOrder || "-"}`, 112);
+    line(`Billing Status: ${share.billingStatus}`, 112);
+    line(`Invoice Number: ${share.invoiceNumber || "-"}`, 112);
+    line(`Value: ${share.value || "-"}`, 112);
+    y = Math.max(afterTaskInfoY, y) + 2;
+    if (share.includeInstructions) {
+      sectionTitle("Instructions");
+      line(task.instructions || "-");
     }
-    await addImageBlock("Documents", selectedDocs, remoteDocuments);
-    await addImageBlock("Photos", selectedPhotos, remotePhotos);
-    addDriveLinksBlock("Documents", selectedDocs, remoteDocuments);
-    addDriveLinksBlock("Photos", selectedPhotos, remotePhotos);
+    if (share.includeGps) {
+      sectionTitle("GPS");
+      line(task.gps ? `${task.gps.latitude}, ${task.gps.longitude}` : "-");
+    }
+    addLinksBlock("All Documents Google Drive Link", exportDocuments);
+    if (share.includeMeasurement) {
+      sectionTitle("Measurement");
+      line(task.measurementText || "-");
+    }
+    if (share.includeMeasurementImages) {
+      addLinksBlock("Measurement Images Google Drive Link", exportMeasurementImages);
+    }
+    addLinksBlock("Photos Google Drive Link", exportPhotos);
     pdf.save(`${task.siteId}_summary.pdf`);
   }
 
+  function safeJsonParse(value) {
+    if (!value) return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function filterLatestRemoteFiles(remoteItems, latestItems) {
+    if (!remoteItems.length) return [];
+    const names = latestItems.map((item) => item.storedName || item.name).filter(Boolean);
+    if (!names.length) return remoteItems;
+    return remoteItems.filter((item) => names.includes(item.name || item.storedName));
+  }
+
+  function mergeExportItems(localItems, remoteItems) {
+    const map = new Map();
+    (localItems || []).forEach((item) => {
+      const key = item.storedName || item.name;
+      if (key) map.set(key, { ...item });
+    });
+    (remoteItems || []).forEach((item) => {
+      const key = item.name || item.storedName;
+      if (!key) return;
+      map.set(key, { ...(map.get(key) || {}), ...item, storedName: key });
+    });
+    return Array.from(map.values());
+  }
+
   async function openTaskDetailModal(taskId) {
+    currentOpenTaskId = taskId;
     const task = state.tasks.find((item) => item.id === taskId);
     const host = document.getElementById("task-detail-modal-content");
     if (!task) {
@@ -359,12 +429,30 @@
     }
 
     const remote = await app.fetchGoogleTask(state.settings.engineer, task.siteId);
-    const remoteDocuments = remote?.documents || [];
-    const remotePhotos = remote?.photos || [];
+    const latestRow = remote?.latestRow || {};
+    const latestDocuments = safeJsonParse(latestRow["Documents JSON"]);
+    const latestPhotos = safeJsonParse(latestRow["Photos JSON"]);
+    const latestMeasurementImages = safeJsonParse(latestRow["Measurement Images JSON"]);
+    const remoteDocuments = filterLatestRemoteFiles(remote?.documents || [], latestDocuments);
+    const remotePhotoPool = filterLatestRemoteFiles(remote?.photos || [], latestPhotos.concat(latestMeasurementImages));
+    const remotePhotos = filterLatestRemoteFiles(remotePhotoPool, latestPhotos);
+    const remoteMeasurementImages = filterLatestRemoteFiles(remotePhotoPool, latestMeasurementImages);
+    const taskView = {
+      ...task,
+      siteEngineerName: latestRow["Site Engineer Name"] || task.siteEngineerName,
+      status: latestRow.Status || task.status,
+      measurementText: latestRow["Measurement Text"] || task.measurementText,
+      gps: latestRow["GPS Latitude"] || latestRow["GPS Longitude"]
+        ? { latitude: latestRow["GPS Latitude"], longitude: latestRow["GPS Longitude"] }
+        : task.gps,
+      documents: latestDocuments.length ? latestDocuments : task.documents,
+      photos: latestPhotos.length ? latestPhotos : task.photos,
+      measurementImages: latestMeasurementImages.length ? latestMeasurementImages : task.measurementImages
+    };
 
     const share = task.sharePackage || {
-      selectedDocuments: task.documents.filter((item) => item.answer === "Yes").map((item) => item.id),
-      selectedPhotos: task.photos.map((item) => item.id),
+      selectedDocuments: taskView.documents.filter((item) => item.answer === "Yes").map((item) => item.id),
+      selectedPhotos: taskView.photos.map((item) => item.id),
       includeMeasurement: true,
       includeMeasurementImages: true,
       includeInstructions: true,
@@ -377,30 +465,38 @@
 
     host.innerHTML = `
       <div class="detail-panel">
-        <div>
-          <h4>${app.escapeHtml(task.siteId)}</h4>
-          <p class="meta-line">${app.escapeHtml(task.client)} | ${app.escapeHtml(task.engineer)} | ${app.escapeHtml(task.siteEngineerName || "-")}</p>
-          <p class="meta-line">${app.formatDate(task.date)} | ${app.escapeHtml(task.location)} | ${app.escapeHtml(task.district || "-")}</p>
-          <span class="status-pill ${app.statusClass(task.status)}">${task.status}</span>
+        <div class="task-hero">
+          <div class="task-hero-main">
+            <h4>Site ID: ${app.escapeHtml(taskView.siteId)}</h4>
+            <p class="task-hero-client">Client: ${app.escapeHtml(taskView.client)}</p>
+            <p class="meta-line"><strong>Engineer:</strong> ${app.escapeHtml(taskView.engineer)}</p>
+            <p class="meta-line"><strong>Site Engineer:</strong> ${app.escapeHtml(taskView.siteEngineerName || "-")}</p>
+          </div>
+          <div class="task-hero-side">
+            <p><strong>Date:</strong> ${app.formatDate(taskView.date)}</p>
+            <p><strong>Location:</strong> ${app.escapeHtml(taskView.location)}</p>
+            <p><strong>District:</strong> ${app.escapeHtml(taskView.district || "-")}</p>
+            <p><strong>Status:</strong> <span class="status-pill ${app.statusClass(taskView.status)}">${taskView.status}</span></p>
+          </div>
         </div>
 
         <div class="form-grid">
-          <div><strong>Instructions</strong><p class="meta-line">${app.escapeHtml(task.instructions || "-")}</p></div>
-          <div><strong>Measurement</strong><p class="meta-line">${app.escapeHtml(task.measurementText || "-")}</p></div>
-          <div><strong>GPS</strong><p class="meta-line">${task.gps ? `${task.gps.latitude}, ${task.gps.longitude}` : "-"}</p></div>
-          <div><strong>Rollback Reason</strong><p class="meta-line">${app.escapeHtml(task.rollbackReason || "-")}</p></div>
+          <div><strong>Instructions</strong><p class="meta-line">${app.escapeHtml(taskView.instructions || "-")}</p></div>
+          <div><strong>Measurement</strong><p class="meta-line">${app.escapeHtml(taskView.measurementText || "-")}</p></div>
+          <div><strong>GPS</strong><p class="meta-line">${taskView.gps ? `${taskView.gps.latitude}, ${taskView.gps.longitude}` : "-"}</p></div>
+          <div><strong>Rollback Reason</strong><p class="meta-line">${app.escapeHtml(taskView.rollbackReason || "-")}</p></div>
         </div>
 
         <div>
           <strong>Documents</strong>
           <div class="check-grid">
-            ${task.documents.filter((item) => item.answer === "Yes").length
-              ? task.documents.filter((item) => item.answer === "Yes").map((item) => `
+            ${taskView.documents.filter((item) => item.answer === "Yes").length
+              ? taskView.documents.filter((item) => item.answer === "Yes").map((item) => `
                 <label><input type="checkbox" data-doc-id="${item.id}" ${share.selectedDocuments.includes(item.id) ? "checked" : ""}>${app.escapeHtml(item.docType || item.storedName)}</label>
               `).join("")
               : '<span class="fine-print">No uploaded documents.</span>'}
           </div>
-          <div class="photo-preview-grid">${(remoteDocuments.length ? remoteDocuments : task.documents.filter((item) => item.answer === "Yes")).map((item, index) => `
+          <div class="photo-preview-grid">${(remoteDocuments.length ? remoteDocuments : taskView.documents.filter((item) => item.answer === "Yes")).map((item, index) => `
             <div class="preview-card">
               ${(item.thumbnailUrl || item.previewUrl) ? `<img class="photo-preview" src="${item.thumbnailUrl || item.previewUrl}" alt="${app.escapeHtml(item.name || item.storedName || `Document ${index + 1}`)}">` : `<span class="frozen-chip">${app.escapeHtml(item.docType || "Document")}</span>`}
               <span class="preview-name">${app.escapeHtml(item.name || item.storedName || `Document ${index + 1}`)}</span>
@@ -411,11 +507,11 @@
         <div>
           <strong>Photos</strong>
           <div class="check-grid">
-            ${task.photos.length
-              ? task.photos.map((item, index) => `<label><input type="checkbox" data-photo-id="${item.id}" ${share.selectedPhotos.includes(item.id) ? "checked" : ""}>Photo ${index + 1}</label>`).join("")
+            ${taskView.photos.length
+              ? taskView.photos.map((item, index) => `<label><input type="checkbox" data-photo-id="${item.id}" ${share.selectedPhotos.includes(item.id) ? "checked" : ""}>Photo ${index + 1}</label>`).join("")
               : '<span class="fine-print">No uploaded photos.</span>'}
           </div>
-          <div class="photo-preview-grid">${(remotePhotos.length ? remotePhotos : task.photos).map((item, index) => `
+          <div class="photo-preview-grid">${(remotePhotos.length ? remotePhotos : taskView.photos).map((item, index) => `
             <div class="preview-card">
               ${(item.thumbnailUrl || item.previewUrl) ? `<img class="photo-preview" src="${item.thumbnailUrl || item.previewUrl}" alt="${app.escapeHtml(item.name || item.storedName || `Photo ${index + 1}`)}">` : `<span class="frozen-chip">${app.escapeHtml(item.name || item.storedName || `Photo ${index + 1}`)}</span>`}
               <span class="preview-name">${app.escapeHtml(item.name || item.storedName || `Photo ${index + 1}`)}</span>
@@ -423,9 +519,19 @@
           `).join("") || '<span class="fine-print">No uploaded photos.</span>'}</div>
         </div>
 
+        <div>
+          <strong>Measurement Images</strong>
+          <div class="photo-preview-grid">${(remoteMeasurementImages.length ? remoteMeasurementImages : taskView.measurementImages).map((item, index) => `
+            <div class="preview-card">
+              ${(item.thumbnailUrl || item.previewUrl) ? `<img class="photo-preview" src="${item.thumbnailUrl || item.previewUrl}" alt="${app.escapeHtml(item.name || item.storedName || `Measurement ${index + 1}`)}">` : `<span class="frozen-chip">${app.escapeHtml(item.name || item.storedName || `Measurement ${index + 1}`)}</span>`}
+              <span class="preview-name">${app.escapeHtml(item.name || item.storedName || `Measurement ${index + 1}`)}</span>
+            </div>
+          `).join("") || '<span class="fine-print">No measurement images.</span>'}</div>
+        </div>
+
         <div class="check-grid">
-          <label><input type="checkbox" id="includeMeasurement" ${share.includeMeasurement ? "checked" : ""}>Measurement Text</label>
           <label><input type="checkbox" id="includeMeasurementImages" ${share.includeMeasurementImages ? "checked" : ""}>Measurement Images</label>
+          <label><input type="checkbox" id="includeMeasurement" ${share.includeMeasurement ? "checked" : ""}>Measurement Text</label>
           <label><input type="checkbox" id="includeInstructions" ${share.includeInstructions ? "checked" : ""}>Instructions</label>
           <label><input type="checkbox" id="includeGps" ${share.includeGps ? "checked" : ""}>GPS</label>
         </div>
@@ -437,7 +543,7 @@
           <label><span>Value</span><input id="shareValue" type="number" step="0.01" value="${app.escapeHtml(share.value)}"></label>
         </div>
 
-        ${task.status === "Completed" ? `
+        ${taskView.status === "Completed" ? `
           <div class="form-grid">
             <label class="full-span"><span>Rollback Reason</span><textarea id="rollbackReason"></textarea></label>
           </div>
@@ -463,10 +569,15 @@
     document.getElementById("download-share-pdf").addEventListener("click", async () => {
       task.sharePackage = collectSharePackage(task.id);
       saveState("exportSharePdf", { taskId: task.id, sharePackage: task.sharePackage });
-      await exportTaskPdf(task, task.sharePackage, remote);
+      await exportTaskPdf(taskView, task.sharePackage, {
+        ...remote,
+        documents: remoteDocuments,
+        photos: remotePhotos,
+        measurementImages: remoteMeasurementImages
+      });
     });
 
-    if (task.status === "Completed") {
+    if (taskView.status === "Completed") {
       document.getElementById("rollback-to-wip").addEventListener("click", () => rollbackTask(task.id, "WIP"));
       document.getElementById("rollback-to-pending").addEventListener("click", () => rollbackTask(task.id, "Pending"));
     }
@@ -490,6 +601,7 @@
   }
 
   function closeTaskDetailModal() {
+    currentOpenTaskId = "";
     document.getElementById("task-detail-modal").classList.add("hidden");
   }
 
@@ -611,6 +723,13 @@
 
   function closeSettings() {
     document.getElementById("settings-modal").classList.add("hidden");
+  }
+
+  async function autofillMasterSettings() {
+    const config = await app.fetchGoogleConfig(state.settings.master);
+    if (!config) return;
+    state.settings.master = app.mergeGoogleSettings(state.settings.master, config);
+    app.writeState(state);
   }
 
   masterForm.addEventListener("submit", (event) => {
@@ -737,14 +856,23 @@
   });
   document.getElementById("open-settings-modal").addEventListener("click", openSettings);
   document.getElementById("master-login-settings").addEventListener("click", openSettings);
+  document.getElementById("master-advanced-settings-toggle").addEventListener("click", () => {
+    document.getElementById("master-advanced-settings").classList.toggle("hidden");
+  });
   document.getElementById("close-settings-modal").addEventListener("click", closeSettings);
   document.getElementById("save-google-settings").addEventListener("click", () => {
-    state.settings.master.googleScriptUrl = googleScriptInput.value.trim();
-    state.settings.master.googleSheetId = googleSheetInput.value.trim();
-    state.settings.master.googleDocumentFolderId = googleDocumentDriveInput.value.trim();
-    state.settings.master.googlePhotoFolderId = googlePhotoDriveInput.value.trim();
-    saveState("saveGoogleSetting", { ...state.settings.master });
-    closeSettings();
+    state.settings.master = app.mergeGoogleSettings(state.settings.master, {
+      googleScriptUrl: googleScriptInput.value,
+      googleSheetId: googleSheetInput.value,
+      googleDocumentFolderId: googleDocumentDriveInput.value,
+      googlePhotoFolderId: googlePhotoDriveInput.value
+    });
+    app.writeState(state);
+    autofillMasterSettings().finally(() => {
+      refreshAll();
+      saveState("saveGoogleSetting", { ...state.settings.master });
+      closeSettings();
+    });
   });
   document.getElementById("close-task-detail-modal").addEventListener("click", closeTaskDetailModal);
   document.getElementById("master-login-form").addEventListener("submit", async (event) => {
@@ -765,7 +893,9 @@
       name: result.user.name || result.user.userId,
       role: result.user.role
     };
+    await autofillMasterSettings();
     app.saveMasterSession(masterSession);
+    refreshAll();
     showMasterApp();
   });
   document.getElementById("master-logout").addEventListener("click", () => {
@@ -778,7 +908,10 @@
   engineerMaster.addEventListener("change", () => toggleOtherField(engineerMaster, engineerMasterOther, "engineerMasterOtherWrap", "engineer"));
   categoryMaster.addEventListener("change", () => toggleOtherField(categoryMaster, categoryMasterOther, "categoryMasterOtherWrap", "category"));
   activityMaster.addEventListener("change", () => toggleOtherField(activityMaster, activityMasterOther, "activityMasterOtherWrap", "activity"));
-  window.addEventListener("storage", refreshAll);
+  window.addEventListener("storage", () => {
+    refreshAll();
+    if (currentOpenTaskId) openTaskDetailModal(currentOpenTaskId);
+  });
 
   (async function init() {
     try {

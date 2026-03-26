@@ -7,6 +7,7 @@
   let map;
   let mapMarker;
   let selectedMapPoint = null;
+  let liveSaveTimer = null;
 
   const loginScreen = document.getElementById("engineer-login-screen");
   const appShell = document.getElementById("engineer-app-shell");
@@ -121,7 +122,8 @@
     }
 
     const isCompleted = task.status === "Completed";
-    const canEdit = task.status === "Pending" || task.status === "WIP";
+    const canEdit = task.status === "WIP";
+    const canStartWip = task.status === "Pending";
     const docHasYes = task.documents.some((item) => item.answer === "Yes");
     const documentAnswer = documentAnswerOverride || (docHasYes ? "Yes" : "No");
     const showDocumentFields = documentAnswer === "Yes" && canEdit && !isCompleted;
@@ -143,7 +145,7 @@
         </div>
 
         <div class="action-row action-row-top">
-          ${!isCompleted ? '<button id="mark-wip" class="secondary-button" type="button">WIP</button>' : ''}
+          ${canStartWip ? '<button id="mark-wip" class="secondary-button" type="button">WIP</button>' : ''}
           <span class="status-pill ${app.statusClass(task.status)}">${task.status}</span>
         </div>
 
@@ -157,7 +159,7 @@
           <h5>Document Available</h5>
           <div class="form-grid">
             <label><span>Document Available</span>
-              <select id="documentAnswer" ${isCompleted ? "disabled" : ""}>
+              <select id="documentAnswer" ${!canEdit || isCompleted ? "disabled" : ""}>
                 <option value="No" ${documentAnswer === "No" ? "selected" : ""}>No</option>
                 <option value="Yes" ${documentAnswer === "Yes" ? "selected" : ""}>Yes</option>
               </select>
@@ -206,20 +208,24 @@
 
         <section class="update-box">
           <h5>Location Capture</h5>
+          <div class="action-row">
+            ${canEdit && !isCompleted ? '<button id="capture-gps" class="secondary-button" type="button">Capture GPS Location</button><button id="pick-gps-map" class="secondary-button" type="button">Open Map And Select</button><button id="clear-gps" class="secondary-button" type="button">Clear Location</button>' : ''}
+          </div>
           <div class="form-grid">
             <label><span>Completion Latitude</span><input id="completionLatitude" type="number" step="any" readonly value="${task.gps?.latitude || ""}"></label>
             <label><span>Completion Longitude</span><input id="completionLongitude" type="number" step="any" readonly value="${task.gps?.longitude || ""}"></label>
-          </div>
-          <div class="action-row">
-            ${canEdit && !isCompleted ? '<button id="capture-gps" class="secondary-button" type="button">Capture GPS Location</button><button id="pick-gps-map" class="secondary-button" type="button">Open Map And Select</button>' : ''}
+            <label><span>District</span><select id="completionDistrict" ${!canEdit || isCompleted ? "disabled" : ""}></select></label>
           </div>
         </section>
 
         <div class="action-row">
-          ${!isCompleted ? '<button id="mark-completed" class="primary-button" type="button">Complete</button>' : ''}
+          ${canEdit && !isCompleted ? '<button id="mark-completed" class="primary-button" type="button">Complete</button>' : ''}
         </div>
       </div>
     `;
+
+    app.setOptions(document.getElementById("completionDistrict"), state.options.districts, "Select District");
+    document.getElementById("completionDistrict").value = task.district || "";
 
     if (canEdit && !isCompleted) {
       document.getElementById("documentAnswer").addEventListener("change", (event) => {
@@ -230,12 +236,20 @@
       document.getElementById("save-measurement")?.addEventListener("click", () => saveMeasurement(task.id));
       document.getElementById("capture-gps")?.addEventListener("click", () => captureGps(task.id));
       document.getElementById("pick-gps-map")?.addEventListener("click", () => openMap(task.id));
-      document.getElementById("mark-wip")?.addEventListener("click", () => markWip(task.id));
+      document.getElementById("clear-gps")?.addEventListener("click", () => clearGps(task.id));
       document.getElementById("mark-completed")?.addEventListener("click", () => markCompleted(task.id));
+      document.getElementById("siteEngineerName")?.addEventListener("change", () => scheduleLiveTaskUpdate(task.id));
+      document.getElementById("measurementText")?.addEventListener("change", () => scheduleLiveTaskUpdate(task.id));
+      document.getElementById("completionDistrict")?.addEventListener("change", (event) => {
+        updateTask(task.id, (taskItem) => {
+          taskItem.district = String(event.target.value || "");
+        }, "updateDistrict");
+      });
       host.querySelectorAll("[data-remove]").forEach((button) => {
         button.addEventListener("click", () => removeFile(task.id, button.dataset.remove, button.dataset.fileId));
       });
     }
+    document.getElementById("mark-wip")?.addEventListener("click", () => markWip(task.id));
   }
 
   function updateTask(taskId, updater, action) {
@@ -250,6 +264,21 @@
 
   function collectSiteEngineerName() {
     return document.getElementById("siteEngineerName")?.value.trim() || "";
+  }
+
+  function scheduleLiveTaskUpdate(taskId) {
+    const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
+    if (!task || task.status !== "WIP") return;
+    clearTimeout(liveSaveTimer);
+    liveSaveTimer = setTimeout(() => {
+      updateTask(taskId, (taskItem) => {
+        taskItem.siteEngineerName = collectSiteEngineerName();
+        const measurementText = document.getElementById("measurementText")?.value.trim();
+        if (typeof measurementText === "string") {
+          taskItem.measurementText = measurementText;
+        }
+      }, "liveWipUpdate");
+    }, 350);
   }
 
   function markWip(taskId) {
@@ -375,6 +404,13 @@
     }, "removeFile");
   }
 
+  function clearGps(taskId) {
+    updateTask(taskId, (task) => {
+      task.gps = null;
+      task.district = "";
+    }, "clearGps");
+  }
+
   function captureGps(taskId) {
     activeTaskId = taskId;
     if (!navigator.geolocation) {
@@ -389,6 +425,7 @@
             longitude: Number(position.coords.longitude.toFixed(6)),
             capturedAt: new Date().toISOString()
           };
+          task.district = document.getElementById("completionDistrict")?.value || task.district || "";
         }, "captureGps");
       },
       () => window.alert("Unable to capture GPS. Please allow location permission or use map select."),
@@ -425,15 +462,18 @@
       window.alert("Please select a point on the map.");
       return;
     }
-    updateTask(activeTaskId, (task) => {
-      task.gps = {
-        latitude: Number(selectedMapPoint.lat.toFixed(6)),
-        longitude: Number(selectedMapPoint.lng.toFixed(6)),
-        capturedAt: new Date().toISOString(),
-        source: "map"
-      };
-    }, "pickGpsOnMap");
-    closeMap();
+    app.reverseGeocodeDistrict(selectedMapPoint.lat.toFixed(6), selectedMapPoint.lng.toFixed(6)).then((district) => {
+      updateTask(activeTaskId, (task) => {
+        task.gps = {
+          latitude: Number(selectedMapPoint.lat.toFixed(6)),
+          longitude: Number(selectedMapPoint.lng.toFixed(6)),
+          capturedAt: new Date().toISOString(),
+          source: "map"
+        };
+        task.district = district || task.district || "";
+      }, "pickGpsOnMap");
+      closeMap();
+    });
   }
 
   function showApp() {
@@ -467,6 +507,13 @@
     document.getElementById("engineer-settings-modal").classList.add("hidden");
   }
 
+  async function autofillEngineerSettings() {
+    const config = await app.fetchGoogleConfig(state.settings.engineer);
+    if (!config) return;
+    state.settings.engineer = app.mergeGoogleSettings(state.settings.engineer, config);
+    app.writeState(state);
+  }
+
   document.getElementById("engineer-login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const debug = document.getElementById("engineer-login-debug");
@@ -481,7 +528,9 @@
     debug.classList.add("hidden");
     currentEngineer = result.user.name || result.user.userId;
     engineerUserId = result.user.userId || "";
+    await autofillEngineerSettings();
     app.saveEngineerSession(currentEngineer);
+    refreshState();
     showApp();
   });
 
@@ -497,14 +546,23 @@
   document.getElementById("save-engineer-map-point").addEventListener("click", applyMapGps);
   document.getElementById("engineer-open-settings-modal").addEventListener("click", openSettings);
   document.getElementById("engineer-login-settings").addEventListener("click", openSettings);
+  document.getElementById("engineer-advanced-settings-toggle").addEventListener("click", () => {
+    document.getElementById("engineer-advanced-settings").classList.toggle("hidden");
+  });
   document.getElementById("close-engineer-settings-modal").addEventListener("click", closeSettings);
   document.getElementById("engineer-save-google-settings").addEventListener("click", () => {
-    state.settings.engineer.googleScriptUrl = engineerGoogleScriptInput.value.trim();
-    state.settings.engineer.googleSheetId = engineerGoogleSheetInput.value.trim();
-    state.settings.engineer.googleDocumentFolderId = engineerGoogleDocumentDriveInput.value.trim();
-    state.settings.engineer.googlePhotoFolderId = engineerGooglePhotoDriveInput.value.trim();
-    saveState("saveGoogleSetting", { ...state.settings.engineer });
-    closeSettings();
+    state.settings.engineer = app.mergeGoogleSettings(state.settings.engineer, {
+      googleScriptUrl: engineerGoogleScriptInput.value,
+      googleSheetId: engineerGoogleSheetInput.value,
+      googleDocumentFolderId: engineerGoogleDocumentDriveInput.value,
+      googlePhotoFolderId: engineerGooglePhotoDriveInput.value
+    });
+    app.writeState(state);
+    autofillEngineerSettings().finally(() => {
+      refreshState();
+      saveState("saveGoogleSetting", { ...state.settings.engineer });
+      closeSettings();
+    });
   });
 
   window.addEventListener("storage", () => {
@@ -514,6 +572,12 @@
 
   (function init() {
     refreshState();
+    if (!state.options.districts.length) {
+      app.loadDistricts().then((districts) => {
+        state.options.districts = districts;
+        app.writeState(state);
+      }).catch(() => {});
+    }
     if (currentEngineer) showApp();
     else showLogin();
   })();

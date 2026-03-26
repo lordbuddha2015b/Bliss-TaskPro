@@ -249,6 +249,44 @@
     }
   }
 
+  async function fetchGoogleConfig(settings) {
+    const endpoint = settings.googleScriptUrl;
+    if (!endpoint) return null;
+    try {
+      const response = await fetch(endpoint, {
+        headers: {
+          Accept: "application/json"
+        }
+      });
+      const data = await response.json();
+      if (!data?.ok) return null;
+      return {
+        googleScriptUrl: sanitizeGoogleValue(data.appUrl),
+        googleSheetId: sanitizeGoogleValue(data.sheetId),
+        googleDocumentFolderId: sanitizeGoogleValue(data.documentFolderId),
+        googlePhotoFolderId: sanitizeGoogleValue(data.photoFolderId)
+      };
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function sanitizeGoogleValue(value) {
+    const next = String(value || "").trim();
+    if (!next) return "";
+    if (next.includes("PASTE_")) return "";
+    return next;
+  }
+
+  function mergeGoogleSettings(currentSettings, nextSettings) {
+    return {
+      googleScriptUrl: sanitizeGoogleValue(nextSettings?.googleScriptUrl) || currentSettings?.googleScriptUrl || "",
+      googleSheetId: sanitizeGoogleValue(nextSettings?.googleSheetId) || currentSettings?.googleSheetId || "",
+      googleDocumentFolderId: sanitizeGoogleValue(nextSettings?.googleDocumentFolderId) || currentSettings?.googleDocumentFolderId || "",
+      googlePhotoFolderId: sanitizeGoogleValue(nextSettings?.googlePhotoFolderId) || currentSettings?.googlePhotoFolderId || ""
+    };
+  }
+
   function normalizeSettings(input, fallback) {
     const base = JSON.parse(JSON.stringify(fallback));
     if (!input) return base;
@@ -323,6 +361,8 @@
     fetchGoogleTask,
     reverseGeocodeDistrict,
     loginWithGoogle,
+    fetchGoogleConfig,
+    mergeGoogleSettings,
     saveMasterSession,
     getMasterSession,
     clearMasterSession,

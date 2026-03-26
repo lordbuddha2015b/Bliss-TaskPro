@@ -76,9 +76,14 @@
       <div class="modal-header"><h4>Engineer Settings</h4><button type="button" id="close-engineer-settings-modal" class="secondary-button">Close</button></div>
       <div class="form-grid">
         <label class="full-span"><span>Apps Script URL</span><input id="engineer-google-script-url" type="url" placeholder="Paste Google Apps Script Web App URL"></label>
-        <label><span>Google Sheet ID</span><input id="engineer-google-sheet-id" type="text" placeholder="Paste Google Sheet ID"></label>
-        <label><span>Document Folder ID</span><input id="engineer-google-document-drive-id" type="text" placeholder="Paste Document Folder ID"></label>
-        <label><span>Photo Folder ID</span><input id="engineer-google-photo-drive-id" type="text" placeholder="Paste Photo Folder ID"></label>
+        <div class="full-span advanced-settings-wrap">
+          <button id="engineer-advanced-settings-toggle" class="secondary-button" type="button">Advanced Settings</button>
+        </div>
+        <div id="engineer-advanced-settings" class="form-grid full-span hidden">
+          <label><span>Google Sheet ID</span><input id="engineer-google-sheet-id" type="text" placeholder="Paste Google Sheet ID"></label>
+          <label><span>Document Folder ID</span><input id="engineer-google-document-drive-id" type="text" placeholder="Paste Document Folder ID"></label>
+          <label><span>Photo Folder ID</span><input id="engineer-google-photo-drive-id" type="text" placeholder="Paste Photo Folder ID"></label>
+        </div>
       </div>
       <div class="modal-footer"><div class="fine-print">These settings are for the Engineer app only.</div><button id="engineer-save-google-settings" class="primary-button" type="button">Save Settings</button></div>
     </div>
