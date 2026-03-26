@@ -10,7 +10,8 @@ const CONFIG = {
 const SHEET_NAMES = {
   master: 'Master_Sheet',
   engineer: 'Engineer_Sheet',
-  credential: 'User_Credential'
+  masterCredential: 'master_Credential',
+  engineerCredential: 'Engineer_Credential'
 };
 
 const MASTER_HEADERS = [
@@ -159,8 +160,9 @@ function getAppSheet_(settings, source) {
   return getOrCreateSheet_(spreadsheet, name);
 }
 
-function getCredentialSheet_(settings) {
-  return getOrCreateSheet_(getSpreadsheet_(settings), SHEET_NAMES.credential);
+function getCredentialSheet_(settings, role) {
+  var name = role === 'master' ? SHEET_NAMES.masterCredential : SHEET_NAMES.engineerCredential;
+  return getOrCreateSheet_(getSpreadsheet_(settings), name);
 }
 
 function getOrCreateSheet_(spreadsheet, name) {
@@ -269,17 +271,17 @@ function ensureHeadersAndStyle_(sheet, headers, headerColor, bandColor) {
 }
 
 function loginUser_(settings, payload) {
-  const sheet = getCredentialSheet_(settings);
+  const requestedRole = String(payload.role || '').toLowerCase();
+  const sheet = getCredentialSheet_(settings, requestedRole);
   ensureCredentialSheet_(sheet);
   const values = sheet.getDataRange().getValues();
   const rows = values.slice(1);
-  const requestedRole = String(payload.role || '').toLowerCase();
   const user = rows.find(function(row) {
     const rowUserId = String(row[0] || '').trim().toLowerCase();
     const rowPassword = String(row[1] || '').trim();
     const rowRole = String(row[2] || '').trim().toLowerCase();
     const isMasterRow = rowRole === 'master' || rowRole.indexOf('master') >= 0;
-    const roleMatches = requestedRole === 'master' ? isMasterRow : true;
+    const roleMatches = requestedRole === 'master' ? isMasterRow : !isMasterRow;
     const inputPassword = String(payload.password || '').trim();
     const inputUserId = String(payload.userId || '').trim().toLowerCase();
 
