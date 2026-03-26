@@ -62,8 +62,26 @@
 
   function writeState(state) {
     writeSettings(state.settings);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizeStateForStorage(state)));
     return state;
+  }
+
+  function sanitizeStateForStorage(state) {
+    return {
+      ...state,
+      tasks: (state.tasks || []).map((task) => ({
+        ...task,
+        documents: (task.documents || []).map(stripFileContent),
+        photos: (task.photos || []).map(stripFileContent),
+        measurementImages: (task.measurementImages || []).map(stripFileContent)
+      }))
+    };
+  }
+
+  function stripFileContent(file) {
+    if (!file || typeof file !== "object") return file;
+    const { base64Content, previewUrl, ...rest } = file;
+    return rest;
   }
 
   function readSettings() {

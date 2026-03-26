@@ -42,11 +42,15 @@
     masterLoginScreen.classList.add("hidden");
     masterAppShell.classList.remove("hidden");
     document.getElementById("master-login-debug").classList.add("hidden");
+    document.getElementById("master-user-eyebrow").textContent = masterSession?.name
+      ? `Field Task Monitor | ${masterSession.name}`
+      : "Field Task Monitor";
   }
 
   function showMasterLogin() {
     masterLoginScreen.classList.remove("hidden");
     masterAppShell.classList.add("hidden");
+    document.getElementById("master-user-eyebrow").textContent = "Field Task Monitor";
   }
 
   function saveState(action, payload) {

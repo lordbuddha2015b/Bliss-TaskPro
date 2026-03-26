@@ -83,7 +83,7 @@
     if (!items.length) return "<li>No files added.</li>";
     return items.map((item, index) => `
       <li>
-        ${app.escapeHtml(item.docType ? `${item.docType} - ` : "")}${app.escapeHtml(item.storedName || item.name || `File ${index + 1}`)}
+        ${app.escapeHtml(item.storedName || item.name || `File ${index + 1}`)}
         ${editable ? `<button class="mini-button" type="button" data-remove="${removeAction}" data-file-id="${item.id}">Remove</button>` : ""}
       </li>
     `).join("");
@@ -99,7 +99,7 @@
     `).join("");
   }
 
-  function renderTaskDetail(taskId) {
+  function renderTaskDetail(taskId, documentAnswerOverride) {
     const task = getEngineerTasks().find((item) => item.id === taskId);
     const host = document.getElementById("engineer-task-detail");
     if (!task) {
@@ -110,19 +110,32 @@
     const isCompleted = task.status === "Completed";
     const canEdit = task.status === "Pending" || task.status === "WIP";
     const docHasYes = task.documents.some((item) => item.answer === "Yes");
+    const documentAnswer = documentAnswerOverride || (docHasYes ? "Yes" : "No");
+    const showDocumentFields = documentAnswer === "Yes" && canEdit && !isCompleted;
 
     host.innerHTML = `
       <div class="detail-panel" data-task-id="${task.id}">
-        <div>
-          <h4>${app.escapeHtml(task.siteId)}</h4>
-          <p class="meta-line">${app.escapeHtml(task.client)} | ${app.escapeHtml(task.category)} | ${app.escapeHtml(task.activity)}</p>
-          <p class="meta-line">${app.formatDate(task.date)} | ${app.escapeHtml(task.location)} | ${app.escapeHtml(task.district || "-")}</p>
+        <div class="task-hero">
+          <div class="task-hero-main">
+            <h4>${app.escapeHtml(task.siteId)}</h4>
+            <p class="task-hero-client">${app.escapeHtml(task.client)}</p>
+            <p class="meta-line">${app.escapeHtml(task.category)} | ${app.escapeHtml(task.activity)}</p>
+          </div>
+          <div class="task-hero-side">
+            <p><strong>Date:</strong> ${app.formatDate(task.date)}</p>
+            <p><strong>Location:</strong> ${app.escapeHtml(task.location)}</p>
+            <p><strong>District:</strong> ${app.escapeHtml(task.district || "-")}</p>
+          </div>
+        </div>
+
+        <div class="action-row action-row-top">
+          ${!isCompleted ? '<button id="mark-wip" class="secondary-button" type="button">WIP</button>' : ''}
           <span class="status-pill ${app.statusClass(task.status)}">${task.status}</span>
         </div>
 
         <section class="update-box">
           <h5>Site Engineer Name</h5>
-          <label><span>Site Engineer Name</span><input id="siteEngineerName" type="text" value="${app.escapeHtml(task.siteEngineerName || "")}" ${isCompleted ? "disabled" : ""}></label>
+          <label><span>Name</span><input id="siteEngineerName" type="text" value="${app.escapeHtml(task.siteEngineerName || "")}" ${isCompleted ? "disabled" : ""}></label>
           <p class="fine-print">${isCompleted ? "Completed task is frozen." : "Required before marking WIP."}</p>
         </section>
 
@@ -131,29 +144,30 @@
           <div class="form-grid">
             <label><span>Document Available</span>
               <select id="documentAnswer" ${isCompleted ? "disabled" : ""}>
-                <option value="No" ${!docHasYes ? "selected" : ""}>No</option>
-                <option value="Yes" ${docHasYes ? "selected" : ""}>Yes</option>
+                <option value="No" ${documentAnswer === "No" ? "selected" : ""}>No</option>
+                <option value="Yes" ${documentAnswer === "Yes" ? "selected" : ""}>Yes</option>
               </select>
             </label>
-            <label><span>Document Type</span>
-              <select id="documentType" ${!canEdit || isCompleted ? "disabled" : ""}>
-                <option value="DN">DN</option>
-                <option value="ESCOMDocuments">ESCOMDocuments</option>
-                <option value="Receipt">Receipt</option>
-                <option value="Electrical Inspectrate">Electrical Inspectrate</option>
-              </select>
-            </label>
-            <label class="full-span" id="document-upload-wrap"><span>Upload Document</span><input id="documentUpload" type="file" ${!canEdit || isCompleted ? "disabled" : ""}></label>
+            ${showDocumentFields ? `
+              <label><span>Document Type</span>
+                <select id="documentType">
+                  <option value="DN">DN</option>
+                  <option value="ESCOMDocuments">ESCOMDocuments</option>
+                  <option value="Receipt">Receipt</option>
+                  <option value="Electrical Inspectrate">Electrical Inspectrate</option>
+                </select>
+              </label>
+              <label class="full-span" id="document-upload-wrap"><span>Upload Document</span><input id="documentUpload" type="file"></label>
+            ` : ""}
           </div>
           <div class="action-row">
-            ${canEdit && !isCompleted ? '<button id="add-document" class="secondary-button" type="button">Add Document</button>' : ''}
+            ${showDocumentFields ? '<button id="add-document" class="secondary-button" type="button">Add Document</button>' : ''}
           </div>
           <ul class="file-list">${fileListMarkup(task.documents, "document", canEdit && !isCompleted)}</ul>
         </section>
 
         <section class="update-box">
           <h5>Site Photos</h5>
-          <p class="fine-print">Maximum 10 photos for one Site ID.</p>
           <div class="doc-config-row">
             <label><span>Upload Photos</span><input id="photoUpload" type="file" accept="image/*" multiple ${!canEdit || isCompleted ? "disabled" : ""}></label>
             <label><span>Camera</span><input id="cameraUpload" type="file" accept="image/*" capture="environment" ${!canEdit || isCompleted ? "disabled" : ""}></label>
@@ -188,19 +202,20 @@
         </section>
 
         <div class="action-row">
-          ${!isCompleted ? '<button id="mark-wip" class="secondary-button" type="button">WIP</button>' : ''}
           ${!isCompleted ? '<button id="mark-completed" class="primary-button" type="button">Complete</button>' : ''}
         </div>
       </div>
     `;
 
     if (canEdit && !isCompleted) {
-      document.getElementById("documentAnswer").addEventListener("change", () => renderTaskDetail(task.id));
+      document.getElementById("documentAnswer").addEventListener("change", (event) => {
+        renderTaskDetail(task.id, event.target.value);
+      });
       document.getElementById("add-document")?.addEventListener("click", () => addDocument(task.id));
       document.getElementById("add-photos")?.addEventListener("click", () => addPhotos(task.id));
       document.getElementById("save-measurement")?.addEventListener("click", () => saveMeasurement(task.id));
       document.getElementById("capture-gps")?.addEventListener("click", () => captureGps(task.id));
-      document.getElementById("pick-gps-map")?.addEventListener("click", openMap);
+      document.getElementById("pick-gps-map")?.addEventListener("click", () => openMap(task.id));
       document.getElementById("mark-wip")?.addEventListener("click", () => markWip(task.id));
       document.getElementById("mark-completed")?.addEventListener("click", () => markCompleted(task.id));
       host.querySelectorAll("[data-remove]").forEach((button) => {
@@ -215,7 +230,6 @@
     updater(task);
     task.updatedAt = new Date().toISOString();
     saveState(action, task);
-    refreshState();
     renderSiteList();
     return task;
   }
@@ -275,6 +289,9 @@
     }
     const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
     const files = await app.enrichFilesWithContent(task.siteId, fileInput.files, { answer: "Yes", docType: type });
+    files.forEach((file) => {
+      file.storedName = `${type}_${task.siteId}_${file.originalName}`;
+    });
     updateTask(taskId, (taskItem) => {
       taskItem.documents = taskItem.documents.filter((item) => !(item.answer === "No"));
       taskItem.documents = taskItem.documents.concat(files);
@@ -307,10 +324,6 @@
       return;
     }
     const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
-    if (task.photos.length + files.length > 10) {
-      window.alert("Only up to 10 photos are allowed for one Site ID.");
-      return;
-    }
     const coords = await getCurrentCoords();
     const next = await app.enrichFilesWithContent(task.siteId, files, coords || {});
     updateTask(taskId, (taskItem) => {
@@ -322,6 +335,10 @@
     const measurementText = document.getElementById("measurementText").value.trim();
     const measurementFiles = document.getElementById("measurementUpload").files;
     const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
+    if (!measurementText && !measurementFiles.length) {
+      window.alert("Please enter measurement text or choose measurement image.");
+      return;
+    }
     const nextFiles = measurementFiles.length ? await app.enrichFilesWithContent(task.siteId, measurementFiles, {}) : [];
     updateTask(taskId, (taskItem) => {
       taskItem.measurementText = measurementText;
@@ -340,7 +357,11 @@
   }
 
   function captureGps(taskId) {
-    if (!navigator.geolocation) return;
+    activeTaskId = taskId;
+    if (!navigator.geolocation) {
+      window.alert("Geolocation is not supported on this device.");
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       (position) => {
         updateTask(taskId, (task) => {
@@ -351,12 +372,13 @@
           };
         }, "captureGps");
       },
-      () => window.alert("Unable to capture GPS."),
+      () => window.alert("Unable to capture GPS. Please allow location permission or use map select."),
       { enableHighAccuracy: true, timeout: 10000 }
     );
   }
 
-  function openMap() {
+  function openMap(taskId = activeTaskId) {
+    activeTaskId = taskId || activeTaskId;
     selectedMapPoint = null;
     document.getElementById("engineer-map-modal").classList.remove("hidden");
     if (!map) {
@@ -398,6 +420,9 @@
   function showApp() {
     loginScreen.classList.add("hidden");
     appShell.classList.remove("hidden");
+    document.getElementById("engineer-user-eyebrow").textContent = currentEngineer
+      ? `Engineer Workspace | ${currentEngineer}`
+      : "Engineer Workspace";
     engineerGoogleScriptInput.value = state.settings.engineer.googleScriptUrl || "";
     engineerGoogleSheetInput.value = state.settings.engineer.googleSheetId || "";
     engineerGoogleDocumentDriveInput.value = state.settings.engineer.googleDocumentFolderId || "";
@@ -408,6 +433,7 @@
   function showLogin() {
     loginScreen.classList.remove("hidden");
     appShell.classList.add("hidden");
+    document.getElementById("engineer-user-eyebrow").textContent = "Engineer Workspace";
   }
 
   function openSettings() {
