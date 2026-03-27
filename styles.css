@@ -614,6 +614,17 @@ tbody td {
   justify-content: flex-start;
 }
 
+.toggle-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.toggle-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
 .map-surface {
   width: 100%;
   height: 360px;

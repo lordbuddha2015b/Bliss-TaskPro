@@ -42,6 +42,7 @@
           <div class="sidebar-nav compact-nav"></div>
           <div class="action-row compact-actions">
             <button id="engineer-logout" class="secondary-button" type="button">Logout</button>
+            <button id="engineer-sync-button" class="secondary-button" type="button">Sync</button>
             <button id="engineer-open-settings-modal" class="icon-button" type="button" aria-label="Open settings">S</button>
           </div>
         </div>
@@ -80,6 +81,7 @@
           <button id="engineer-advanced-settings-toggle" class="secondary-button" type="button">Advanced Settings</button>
         </div>
         <div id="engineer-advanced-settings" class="form-grid full-span hidden">
+          <label class="full-span toggle-row"><input id="engineer-auto-sync" type="checkbox"><span>Auto Sync Every Few Seconds</span></label>
           <label><span>Google Sheet ID</span><input id="engineer-google-sheet-id" type="text" placeholder="Paste Google Sheet ID"></label>
           <label><span>Document Folder ID</span><input id="engineer-google-document-drive-id" type="text" placeholder="Paste Document Folder ID"></label>
           <label><span>Photo Folder ID</span><input id="engineer-google-photo-drive-id" type="text" placeholder="Paste Photo Folder ID"></label>

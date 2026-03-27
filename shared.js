@@ -17,13 +17,15 @@
         googleScriptUrl: "",
         googleSheetId: "",
         googleDocumentFolderId: "",
-        googlePhotoFolderId: ""
+        googlePhotoFolderId: "",
+        autoSyncEnabled: true
       },
       engineer: {
         googleScriptUrl: "",
         googleSheetId: "",
         googleDocumentFolderId: "",
-        googlePhotoFolderId: ""
+        googlePhotoFolderId: "",
+        autoSyncEnabled: true
       }
     },
     drafts: [],
@@ -198,7 +200,7 @@
       await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ ...payload, activeSettings })
+        body: JSON.stringify({ ...payload, state: sanitizeStateForStorage(state), activeSettings })
       });
       return { skipped: false };
     } catch (error) {
@@ -222,6 +224,27 @@
         }
       });
       return await response.json();
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async function fetchGoogleState(settings) {
+    const endpoint = settings.googleScriptUrl;
+    if (!endpoint) return null;
+    try {
+      const url = new URL(endpoint);
+      url.searchParams.set("action", "getState");
+      url.searchParams.set("sheetId", settings.googleSheetId || "");
+      url.searchParams.set("documentFolderId", settings.googleDocumentFolderId || "");
+      url.searchParams.set("photoFolderId", settings.googlePhotoFolderId || "");
+      const response = await fetch(url.toString(), {
+        headers: {
+          Accept: "application/json"
+        }
+      });
+      const data = await response.json();
+      return data?.ok ? data.state || null : null;
     } catch (error) {
       return null;
     }
@@ -283,7 +306,10 @@
       googleScriptUrl: sanitizeGoogleValue(nextSettings?.googleScriptUrl) || currentSettings?.googleScriptUrl || "",
       googleSheetId: sanitizeGoogleValue(nextSettings?.googleSheetId) || currentSettings?.googleSheetId || "",
       googleDocumentFolderId: sanitizeGoogleValue(nextSettings?.googleDocumentFolderId) || currentSettings?.googleDocumentFolderId || "",
-      googlePhotoFolderId: sanitizeGoogleValue(nextSettings?.googlePhotoFolderId) || currentSettings?.googlePhotoFolderId || ""
+      googlePhotoFolderId: sanitizeGoogleValue(nextSettings?.googlePhotoFolderId) || currentSettings?.googlePhotoFolderId || "",
+      autoSyncEnabled: typeof nextSettings?.autoSyncEnabled === "boolean"
+        ? nextSettings.autoSyncEnabled
+        : currentSettings?.autoSyncEnabled ?? true
     };
   }
 
@@ -359,6 +385,7 @@
     loadDistricts,
     postGoogleSync,
     fetchGoogleTask,
+    fetchGoogleState,
     reverseGeocodeDistrict,
     loginWithGoogle,
     fetchGoogleConfig,

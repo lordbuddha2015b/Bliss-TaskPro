@@ -11,7 +11,8 @@ const SHEET_NAMES = {
   master: 'Master_Sheet',
   engineer: 'Engineer_Sheet',
   masterCredential: 'master_Credential',
-  engineerCredential: 'Engineer_Credential'
+  engineerCredential: 'Engineer_Credential',
+  appState: 'App_State'
 };
 
 const MASTER_HEADERS = [
@@ -27,11 +28,15 @@ const ENGINEER_HEADERS = [
 ];
 
 const USER_HEADERS = ['User ID', 'Password', 'Role', 'Display Name', 'Status'];
+const APP_STATE_HEADERS = ['Timestamp', 'Source', 'State JSON'];
 
 function doGet(e) {
   const action = (e && e.parameter && e.parameter.action) || '';
   if (action === 'getTask') {
     return jsonOutput(getTaskSnapshot_(e.parameter || {}));
+  }
+  if (action === 'getState') {
+    return jsonOutput(getLatestAppState_(e.parameter || {}));
   }
   return jsonOutput({
     ok: true,
@@ -70,6 +75,7 @@ function doPost(e) {
     sheet.appendRow(row);
 
     const uploadedFiles = saveFilesToDrive_(task, activeSettings);
+    saveAppState_(activeSettings, source, state);
 
     return jsonOutput({
       ok: true,
@@ -254,6 +260,10 @@ function ensureCredentialSheet_(sheet) {
   ensureHeadersAndStyle_(sheet, USER_HEADERS, '#2F6690', '#D9EEF9');
 }
 
+function ensureAppStateSheet_(sheet) {
+  ensureHeadersAndStyle_(sheet, APP_STATE_HEADERS, '#245953', '#DDF3EE');
+}
+
 function ensureHeadersAndStyle_(sheet, headers, headerColor, bandColor) {
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(headers);
@@ -272,6 +282,47 @@ function ensureHeadersAndStyle_(sheet, headers, headerColor, bandColor) {
   }
   for (var i = 1; i <= headers.length; i++) {
     sheet.setColumnWidth(i, 170);
+  }
+}
+
+function getStateSheet_(settings) {
+  return getOrCreateSheet_(getSpreadsheet_(settings), SHEET_NAMES.appState);
+}
+
+function saveAppState_(settings, source, state) {
+  if (!state) return;
+  const sheet = getStateSheet_(settings);
+  ensureAppStateSheet_(sheet);
+  sheet.appendRow([
+    new Date(),
+    source || '',
+    JSON.stringify(state || {})
+  ]);
+}
+
+function getLatestAppState_(params) {
+  const settings = {
+    googleSheetId: params.sheetId || '',
+    googleDocumentFolderId: params.documentFolderId || '',
+    googlePhotoFolderId: params.photoFolderId || ''
+  };
+  const sheet = getStateSheet_(settings);
+  ensureAppStateSheet_(sheet);
+  const values = sheet.getDataRange().getValues();
+  if (values.length <= 1) {
+    return { ok: true, state: null };
+  }
+  const latest = values[values.length - 1];
+  try {
+    return {
+      ok: true,
+      state: JSON.parse(String(latest[2] || '{}'))
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: 'Invalid state JSON in App_State sheet.'
+    };
   }
 }
 

@@ -8,6 +8,7 @@
   let masterSession = app.getMasterSession();
   let map;
   let mapMarker;
+  let syncTimer = null;
 
   const navButtons = document.querySelectorAll("[data-page-target]");
   const sections = document.querySelectorAll(".page-section");
@@ -20,6 +21,8 @@
   const googleSheetInput = document.getElementById("google-sheet-id");
   const googleDocumentDriveInput = document.getElementById("google-document-drive-id");
   const googlePhotoDriveInput = document.getElementById("google-photo-drive-id");
+  const masterAutoSyncInput = document.getElementById("master-auto-sync");
+  const masterSyncButton = document.getElementById("master-sync-button");
 
   const clientMaster = document.getElementById("clientMaster");
   const engineerMaster = document.getElementById("engineerMaster");
@@ -623,6 +626,7 @@
     googleSheetInput.value = state.settings.master.googleSheetId || "";
     googleDocumentDriveInput.value = state.settings.master.googleDocumentFolderId || "";
     googlePhotoDriveInput.value = state.settings.master.googlePhotoFolderId || "";
+    masterAutoSyncInput.checked = state.settings.master.autoSyncEnabled !== false;
     setOptions();
     toggleOtherField(clientMaster, clientMasterOther, "clientMasterOtherWrap", "client");
     toggleOtherField(engineerMaster, engineerMasterOther, "engineerMasterOtherWrap", "engineer");
@@ -633,6 +637,38 @@
     renderQueue();
     renderTaskTable();
     renderStats();
+  }
+
+  async function syncFromGoogleState() {
+    if (masterSyncButton) {
+      masterSyncButton.disabled = true;
+      masterSyncButton.textContent = "Syncing...";
+    }
+    const remoteState = await app.fetchGoogleState(state.settings.master);
+    if (remoteState) {
+      state.options = { ...state.options, ...(remoteState.options || {}) };
+      state.drafts = Array.isArray(remoteState.drafts) ? remoteState.drafts : state.drafts;
+      state.tasks = Array.isArray(remoteState.tasks) ? remoteState.tasks : state.tasks;
+      app.writeState(state);
+      refreshAll();
+      if (currentOpenTaskId) openTaskDetailModal(currentOpenTaskId);
+    }
+    if (masterSyncButton) {
+      masterSyncButton.disabled = false;
+      masterSyncButton.textContent = "Sync";
+    }
+  }
+
+  function startCrossDeviceSync() {
+    clearInterval(syncTimer);
+    if (!state.settings.master.googleScriptUrl || state.settings.master.autoSyncEnabled === false) return;
+    syncFromGoogleState();
+    syncTimer = setInterval(syncFromGoogleState, 10000);
+  }
+
+  function stopCrossDeviceSync() {
+    clearInterval(syncTimer);
+    syncTimer = null;
   }
 
   function openMap() {
@@ -855,6 +891,7 @@
     closeMap();
   });
   document.getElementById("open-settings-modal").addEventListener("click", openSettings);
+  masterSyncButton?.addEventListener("click", syncFromGoogleState);
   document.getElementById("master-login-settings").addEventListener("click", openSettings);
   document.getElementById("master-advanced-settings-toggle").addEventListener("click", () => {
     document.getElementById("master-advanced-settings").classList.toggle("hidden");
@@ -865,12 +902,14 @@
       googleScriptUrl: googleScriptInput.value,
       googleSheetId: googleSheetInput.value,
       googleDocumentFolderId: googleDocumentDriveInput.value,
-      googlePhotoFolderId: googlePhotoDriveInput.value
+      googlePhotoFolderId: googlePhotoDriveInput.value,
+      autoSyncEnabled: masterAutoSyncInput.checked
     });
     app.writeState(state);
     autofillMasterSettings().finally(() => {
       refreshAll();
       saveState("saveGoogleSetting", { ...state.settings.master });
+      startCrossDeviceSync();
       closeSettings();
     });
   });
@@ -896,11 +935,13 @@
     await autofillMasterSettings();
     app.saveMasterSession(masterSession);
     refreshAll();
+    startCrossDeviceSync();
     showMasterApp();
   });
   document.getElementById("master-logout").addEventListener("click", () => {
     masterSession = null;
     app.clearMasterSession();
+    stopCrossDeviceSync();
     showMasterLogin();
   });
 
@@ -922,7 +963,9 @@
     }
     assignDate.value = new Date().toISOString().split("T")[0];
     refreshAll();
-    if (masterSession) showMasterApp();
-    else showMasterLogin();
+    if (masterSession) {
+      startCrossDeviceSync();
+      showMasterApp();
+    } else showMasterLogin();
   })();
 })();

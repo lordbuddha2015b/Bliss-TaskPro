@@ -46,6 +46,7 @@
           </nav>
           <div class="action-row compact-actions">
             <button id="master-logout" class="secondary-button" type="button">Logout</button>
+            <button id="master-sync-button" class="secondary-button" type="button">Sync</button>
             <button id="open-settings-modal" class="icon-button" type="button" aria-label="Open settings">S</button>
           </div>
         </div>
@@ -143,6 +144,7 @@
           <button id="master-advanced-settings-toggle" class="secondary-button" type="button">Advanced Settings</button>
         </div>
         <div id="master-advanced-settings" class="form-grid full-span hidden">
+          <label class="full-span toggle-row"><input id="master-auto-sync" type="checkbox"><span>Auto Sync Every Few Seconds</span></label>
           <label><span>Google Sheet ID</span><input id="google-sheet-id" type="text" placeholder="Paste Google Sheet ID"></label>
           <label><span>Document Folder ID</span><input id="google-document-drive-id" type="text" placeholder="Paste Document Folder ID"></label>
           <label><span>Photo Folder ID</span><input id="google-photo-drive-id" type="text" placeholder="Paste Photo Folder ID"></label>

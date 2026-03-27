@@ -8,6 +8,7 @@
   let mapMarker;
   let selectedMapPoint = null;
   let liveSaveTimer = null;
+  let syncTimer = null;
 
   const loginScreen = document.getElementById("engineer-login-screen");
   const appShell = document.getElementById("engineer-app-shell");
@@ -17,6 +18,8 @@
   const engineerGoogleSheetInput = document.getElementById("engineer-google-sheet-id");
   const engineerGoogleDocumentDriveInput = document.getElementById("engineer-google-document-drive-id");
   const engineerGooglePhotoDriveInput = document.getElementById("engineer-google-photo-drive-id");
+  const engineerAutoSyncInput = document.getElementById("engineer-auto-sync");
+  const engineerSyncButton = document.getElementById("engineer-sync-button");
 
   function saveState(action, payload) {
     app.writeState(state);
@@ -486,7 +489,39 @@
     engineerGoogleSheetInput.value = state.settings.engineer.googleSheetId || "";
     engineerGoogleDocumentDriveInput.value = state.settings.engineer.googleDocumentFolderId || "";
     engineerGooglePhotoDriveInput.value = state.settings.engineer.googlePhotoFolderId || "";
+    engineerAutoSyncInput.checked = state.settings.engineer.autoSyncEnabled !== false;
     renderSiteList();
+  }
+
+  async function syncFromGoogleState() {
+    if (engineerSyncButton) {
+      engineerSyncButton.disabled = true;
+      engineerSyncButton.textContent = "Syncing...";
+    }
+    const remoteState = await app.fetchGoogleState(state.settings.engineer);
+    if (remoteState) {
+      state.options = { ...state.options, ...(remoteState.options || {}) };
+      state.drafts = Array.isArray(remoteState.drafts) ? remoteState.drafts : state.drafts;
+      state.tasks = Array.isArray(remoteState.tasks) ? remoteState.tasks : state.tasks;
+      app.writeState(state);
+      renderSiteList();
+    }
+    if (engineerSyncButton) {
+      engineerSyncButton.disabled = false;
+      engineerSyncButton.textContent = "Sync";
+    }
+  }
+
+  function startCrossDeviceSync() {
+    clearInterval(syncTimer);
+    if (!state.settings.engineer.googleScriptUrl || state.settings.engineer.autoSyncEnabled === false) return;
+    syncFromGoogleState();
+    syncTimer = setInterval(syncFromGoogleState, 10000);
+  }
+
+  function stopCrossDeviceSync() {
+    clearInterval(syncTimer);
+    syncTimer = null;
   }
 
   function showLogin() {
@@ -531,6 +566,7 @@
     await autofillEngineerSettings();
     app.saveEngineerSession(currentEngineer);
     refreshState();
+    startCrossDeviceSync();
     showApp();
   });
 
@@ -539,11 +575,13 @@
     engineerUserId = "";
     activeTaskId = "";
     app.clearEngineerSession();
+    stopCrossDeviceSync();
     showLogin();
   });
 
   document.getElementById("close-engineer-map-modal").addEventListener("click", closeMap);
   document.getElementById("save-engineer-map-point").addEventListener("click", applyMapGps);
+  engineerSyncButton?.addEventListener("click", syncFromGoogleState);
   document.getElementById("engineer-open-settings-modal").addEventListener("click", openSettings);
   document.getElementById("engineer-login-settings").addEventListener("click", openSettings);
   document.getElementById("engineer-advanced-settings-toggle").addEventListener("click", () => {
@@ -555,12 +593,14 @@
       googleScriptUrl: engineerGoogleScriptInput.value,
       googleSheetId: engineerGoogleSheetInput.value,
       googleDocumentFolderId: engineerGoogleDocumentDriveInput.value,
-      googlePhotoFolderId: engineerGooglePhotoDriveInput.value
+      googlePhotoFolderId: engineerGooglePhotoDriveInput.value,
+      autoSyncEnabled: engineerAutoSyncInput.checked
     });
     app.writeState(state);
     autofillEngineerSettings().finally(() => {
       refreshState();
       saveState("saveGoogleSetting", { ...state.settings.engineer });
+      startCrossDeviceSync();
       closeSettings();
     });
   });
@@ -578,7 +618,9 @@
         app.writeState(state);
       }).catch(() => {});
     }
-    if (currentEngineer) showApp();
-    else showLogin();
+    if (currentEngineer) {
+      startCrossDeviceSync();
+      showApp();
+    } else showLogin();
   })();
 })();
