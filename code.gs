@@ -96,6 +96,7 @@ function doPost(e) {
   } catch (error) {
     return jsonOutput({
       ok: false,
+      message: error.message,
       error: error.message
     });
   }

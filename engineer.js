@@ -639,12 +639,24 @@
   document.getElementById("engineer-login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const debug = document.getElementById("engineer-login-debug");
+    const submitButton = event.currentTarget.querySelector('button[type="submit"]');
     const userId = engineerLoginUser.value.trim();
     const password = engineerLoginPassword.value;
+    debug.classList.add("hidden");
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = "Signing In...";
+    }
+    app.showSyncStatus("Checking Engineer login...", "working", true);
     const result = await app.loginWithGoogle(state.settings.engineer, "engineer", userId, password);
     if (!result.ok) {
-      debug.textContent = result.message || "Login failed.";
+      debug.textContent = app.formatLoginFailure(result);
       debug.classList.remove("hidden");
+      app.showSyncStatus(app.formatLoginFailure(result), "error");
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = "Login To Engineer App";
+      }
       return;
     }
     debug.classList.add("hidden");
@@ -661,9 +673,19 @@
     app.saveEngineerSession(engineerSession);
     refreshState();
     await syncFromGoogleState({ silent: false });
-    if (!engineerSession) return;
+    if (!engineerSession) {
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = "Login To Engineer App";
+      }
+      return;
+    }
     startCrossDeviceSync();
     showApp();
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = "Login To Engineer App";
+    }
   });
 
   document.getElementById("engineer-logout").addEventListener("click", () => {

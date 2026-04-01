@@ -1004,13 +1004,25 @@
   document.getElementById("master-login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const debug = document.getElementById("master-login-debug");
+    const submitButton = event.currentTarget.querySelector('button[type="submit"]');
     const settings = state.settings.master;
     const userId = document.getElementById("master-login-user").value.trim();
     const password = document.getElementById("master-login-password").value;
+    debug.classList.add("hidden");
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = "Signing In...";
+    }
+    app.showSyncStatus("Checking Master login...", "working", true);
     const result = await app.loginWithGoogle(settings, "master", userId, password);
     if (!result.ok) {
-      debug.textContent = result.message || "Login failed.";
+      debug.textContent = app.formatLoginFailure(result);
       debug.classList.remove("hidden");
+      app.showSyncStatus(app.formatLoginFailure(result), "error");
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = "Login To Master App";
+      }
       return;
     }
     debug.classList.add("hidden");
@@ -1025,9 +1037,19 @@
     app.saveMasterSession(masterSession);
     refreshAll();
     await syncFromGoogleState({ silent: false });
-    if (!masterSession) return;
+    if (!masterSession) {
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = "Login To Master App";
+      }
+      return;
+    }
     startCrossDeviceSync();
     showMasterApp();
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = "Login To Master App";
+    }
   });
   document.getElementById("master-logout").addEventListener("click", () => {
     masterSession = null;

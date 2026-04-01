@@ -280,9 +280,15 @@
           payload: { role, userId, password }
         })
       });
-      return await response.json();
+      const data = await response.json();
+      if (data?.ok) return data;
+      return {
+        ok: false,
+        message: data?.message || data?.error || "Login failed.",
+        error: data?.error || data?.message || "Login failed."
+      };
     } catch (error) {
-      return { ok: false, message: "Unable to verify login." };
+      return { ok: false, message: `Unable to verify login. ${error.message || ""}`.trim() };
     }
   }
 
@@ -430,6 +436,20 @@
     }
   }
 
+  function formatLoginFailure(result) {
+    const message = String(result?.message || result?.error || "Login failed.").trim();
+    if (/CONFIG\.SHEET_ID/i.test(message) || /Please update CONFIG\.SHEET_ID/i.test(message)) {
+      return `${message} Update SHEET_ID in Apps Script code.gs or save Google Sheet ID in Advanced Settings.`;
+    }
+    if (/Credential sheet not found/i.test(message) || /Credential sheet is empty/i.test(message)) {
+      return `${message} Check your Google Sheet tabs and login rows.`;
+    }
+    if (/Apps Script URL is required/i.test(message)) {
+      return `${message} Open Settings and save the deployed Apps Script Web App URL first.`;
+    }
+    return message;
+  }
+
   function clearMasterSession() {
     sessionStorage.removeItem(MASTER_SESSION_KEY);
   }
@@ -471,6 +491,7 @@
     reverseGeocodeDistrict,
     loginWithGoogle,
     fetchGoogleConfig,
+    formatLoginFailure,
     validateGoogleSession,
     mergeGoogleSettings,
     showSyncStatus,
