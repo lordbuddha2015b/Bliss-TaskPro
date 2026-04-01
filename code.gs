@@ -1,9 +1,9 @@
 const CONFIG = {
   APP_NAME: 'Bliss TaskPro',
-  SHEET_ID: 'PASTE_GOOGLE_SHEET_ID_HERE',
-  CREDENTIAL_SHEET_ID: '13cvKhTotizLSjae5U1uhneAjeG1KVX30aKiPb_yMMeQ',
-  DOCUMENT_FOLDER_ID: 'PASTE_DOCUMENT_FOLDER_ID_HERE',
-  PHOTO_FOLDER_ID: 'PASTE_PHOTO_FOLDER_ID_HERE',
+  CREDENTIAL_SHEET_ID: '1RuV_gocgi-DwFpN8uQqwE-MWiwHvXBg1-Ly0gL-ZbEk',
+  ENTRY_SHEET_ID: '13FpNMiOSQqVDTP_S-bmoNiGC2zSM-D_2_r1f5TfjD9I',
+  DOCUMENT_FOLDER_ID: '1LRqfC3LAmN8s7kAKXjKhTYawhW2pcYBb',
+  PHOTO_FOLDER_ID: '1YK4tt9njxSTnZeOnd4sw4qeBsA9g5Eri',
   APP_URL: 'PASTE_DEPLOYED_APPS_SCRIPT_WEB_APP_URL_HERE',
   ALLOWED_ORIGIN: '*'
 };
@@ -46,7 +46,7 @@ function doGet(e) {
     ok: true,
     appName: CONFIG.APP_NAME,
     appUrl: CONFIG.APP_URL,
-    sheetId: CONFIG.SHEET_ID,
+    sheetId: CONFIG.ENTRY_SHEET_ID,
     documentFolderId: CONFIG.DOCUMENT_FOLDER_ID,
     photoFolderId: CONFIG.PHOTO_FOLDER_ID
   });
@@ -165,24 +165,42 @@ function saveFilesToDrive_(task, settings) {
   return saved;
 }
 
-function getSpreadsheet_(settings) {
-  const sheetId = settings.googleSheetId || CONFIG.SHEET_ID;
+function getSpreadsheetById_(sheetId, errorMessage) {
   if (!sheetId || sheetId.indexOf('PASTE_') === 0) {
-    throw new Error('Please update CONFIG.SHEET_ID in code.gs');
+    throw new Error(errorMessage);
   }
   return SpreadsheetApp.openById(sheetId);
+}
+
+function getSpreadsheet_(settings) {
+  const sheetId = CONFIG.ENTRY_SHEET_ID || settings.googleSheetId;
+  return getSpreadsheetById_(sheetId, 'Please update CONFIG.ENTRY_SHEET_ID in code.gs');
 }
 
 function getCredentialSpreadsheet_() {
-  const sheetId = CONFIG.CREDENTIAL_SHEET_ID || CONFIG.SHEET_ID;
-  if (!sheetId || sheetId.indexOf('PASTE_') === 0) {
-    throw new Error('Please update CONFIG.CREDENTIAL_SHEET_ID in code.gs');
-  }
-  return SpreadsheetApp.openById(sheetId);
+  const sheetId = CONFIG.CREDENTIAL_SHEET_ID;
+  return getSpreadsheetById_(sheetId, 'Please update CONFIG.CREDENTIAL_SHEET_ID in code.gs');
+}
+
+function getMasterTaskSpreadsheet_(settings) {
+  const sheetId = CONFIG.ENTRY_SHEET_ID || settings.googleSheetId;
+  return getSpreadsheetById_(sheetId, 'Please update CONFIG.ENTRY_SHEET_ID in code.gs');
+}
+
+function getEngineerTaskSpreadsheet_(settings) {
+  const sheetId = CONFIG.ENTRY_SHEET_ID || settings.googleSheetId;
+  return getSpreadsheetById_(sheetId, 'Please update CONFIG.ENTRY_SHEET_ID in code.gs');
+}
+
+function getAppStateSpreadsheet_(settings) {
+  const sheetId = CONFIG.ENTRY_SHEET_ID || settings.googleSheetId;
+  return getSpreadsheetById_(sheetId, 'Please update CONFIG.ENTRY_SHEET_ID in code.gs');
 }
 
 function getAppSheet_(settings, source) {
-  const spreadsheet = getSpreadsheet_(settings);
+  const spreadsheet = source === 'engineer'
+    ? getEngineerTaskSpreadsheet_(settings)
+    : getMasterTaskSpreadsheet_(settings);
   const name = source === 'engineer' ? SHEET_NAMES.engineer : SHEET_NAMES.master;
   return getOrCreateSheet_(spreadsheet, name);
 }
@@ -302,7 +320,7 @@ function ensureHeaders_(sheet, headers) {
 }
 
 function getStateSheet_(settings) {
-  return getOrCreateSheet_(getSpreadsheet_(settings), SHEET_NAMES.appState);
+  return getOrCreateSheet_(getAppStateSpreadsheet_(settings), SHEET_NAMES.appState);
 }
 
 function saveAppState_(settings, source, state) {
