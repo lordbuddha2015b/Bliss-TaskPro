@@ -399,10 +399,10 @@ function buildLatestMergedState_(settings, baseState) {
 function buildLatestOptions_(state) {
   var options = state.options || {};
   return {
-    clients: dedupeNonEmpty_((options.clients || []).concat(state.tasks.map(function(task) { return task.client; }))),
-    engineers: dedupeNonEmpty_((options.engineers || []).concat(state.tasks.map(function(task) { return task.engineer; }))),
-    categories: dedupeNonEmpty_((options.categories || []).concat(state.tasks.map(function(task) { return task.category; }))),
-    activities: dedupeNonEmpty_((options.activities || []).concat(state.tasks.map(function(task) { return task.activity; }))),
+    clients: dedupeNonEmpty_(['JIO', 'Retail', 'Others'].concat(options.clients || []).concat(state.tasks.map(function(task) { return task.client; }))),
+    engineers: dedupeNonEmpty_(['Naveen', 'Rocky', 'Sriram'].concat(options.engineers || []).concat(state.tasks.map(function(task) { return task.engineer; }))),
+    categories: dedupeNonEmpty_(['Project', 'O&M', 'Others'].concat(options.categories || []).concat(state.tasks.map(function(task) { return task.category; }))),
+    activities: dedupeNonEmpty_(['Enod B', '5G', 'Upgradation', 'Repair', 'Others'].concat(options.activities || []).concat(state.tasks.map(function(task) { return task.activity; }))),
     districts: dedupeNonEmpty_((options.districts || []).concat(state.tasks.map(function(task) { return task.district; })))
   };
 }
@@ -422,10 +422,10 @@ function dedupeNonEmpty_(values) {
 function normalizeAppState_(state) {
   return {
     options: {
-      clients: Array.isArray(state.options && state.options.clients) ? state.options.clients : [],
-      engineers: Array.isArray(state.options && state.options.engineers) ? state.options.engineers : [],
-      categories: Array.isArray(state.options && state.options.categories) ? state.options.categories : [],
-      activities: Array.isArray(state.options && state.options.activities) ? state.options.activities : [],
+      clients: Array.isArray(state.options && state.options.clients) ? state.options.clients : ['JIO', 'Retail', 'Others'],
+      engineers: Array.isArray(state.options && state.options.engineers) ? state.options.engineers : ['Naveen', 'Rocky', 'Sriram'],
+      categories: Array.isArray(state.options && state.options.categories) ? state.options.categories : ['Project', 'O&M', 'Others'],
+      activities: Array.isArray(state.options && state.options.activities) ? state.options.activities : ['Enod B', '5G', 'Upgradation', 'Repair', 'Others'],
       districts: Array.isArray(state.options && state.options.districts) ? state.options.districts : []
     },
     settings: state.settings || {},

@@ -50,7 +50,7 @@
       const parsed = JSON.parse(raw);
       const base = cloneDefaults();
       return {
-        options: { ...base.options, ...(parsed.options || {}) },
+        options: normalizeOptions(parsed.options, base.options),
         settings: normalizeSettings(storedSettings || parsed.settings, base.settings),
         drafts: Array.isArray(parsed.drafts) ? parsed.drafts : [],
         tasks: Array.isArray(parsed.tasks) ? parsed.tasks : []
@@ -98,6 +98,29 @@
 
   function writeSettings(settings) {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }
+
+  function normalizeOptions(input, fallback) {
+    const base = JSON.parse(JSON.stringify(fallback));
+    const next = input || {};
+    return {
+      clients: mergeOptionList(base.clients, next.clients),
+      engineers: mergeOptionList(base.engineers, next.engineers),
+      categories: mergeOptionList(base.categories, next.categories),
+      activities: mergeOptionList(base.activities, next.activities),
+      districts: mergeOptionList(base.districts, next.districts)
+    };
+  }
+
+  function mergeOptionList(baseList, nextList) {
+    const seen = new Set();
+    return [...(Array.isArray(baseList) ? baseList : []), ...(Array.isArray(nextList) ? nextList : [])]
+      .map((item) => String(item || "").trim())
+      .filter((item) => {
+        if (!item || seen.has(item)) return false;
+        seen.add(item);
+        return true;
+      });
   }
 
   function clearLocalCache() {
