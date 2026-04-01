@@ -2,13 +2,15 @@
   const app = window.BlissTaskPro;
   let state = app.readState();
   let activeTaskId = "";
-  let currentEngineer = app.getEngineerSession();
-  let engineerUserId = "";
+  let engineerSession = app.getEngineerSession();
+  let currentEngineer = engineerSession?.name || "";
+  let engineerUserId = engineerSession?.userId || "";
   let map;
   let mapMarker;
   let selectedMapPoint = null;
   let liveSaveTimer = null;
   let syncTimer = null;
+  let sessionTimer = null;
 
   const loginScreen = document.getElementById("engineer-login-screen");
   const appShell = document.getElementById("engineer-app-shell");
@@ -21,15 +23,55 @@
   const engineerAutoSyncInput = document.getElementById("engineer-auto-sync");
   const engineerSyncButton = document.getElementById("engineer-sync-button");
 
+  function applyRemoteState(remoteState) {
+    if (!remoteState) return;
+    state.options = { ...state.options, ...(remoteState.options || {}) };
+    state.drafts = Array.isArray(remoteState.drafts) ? remoteState.drafts : state.drafts;
+    state.tasks = Array.isArray(remoteState.tasks) ? remoteState.tasks : state.tasks;
+    app.writeState(state);
+    renderSiteList();
+  }
+
+  function forceLogout(message) {
+    currentEngineer = "";
+    engineerUserId = "";
+    engineerSession = null;
+    activeTaskId = "";
+    app.clearEngineerSession();
+    stopCrossDeviceSync();
+    if (message) {
+      app.showSyncStatus(message, "error");
+      window.alert(message);
+    }
+    showLogin();
+  }
+
   function saveState(action, payload) {
     app.writeState(state);
+    if (!engineerSession?.userId || !engineerSession?.sessionToken) return;
+    app.showSyncStatus("Saving data to Google Sheet and Drive...", "working", true);
     app.postGoogleSync(state, {
       app: "Bliss TaskPro",
       source: "engineer",
       userId: engineerUserId,
+      sessionToken: engineerSession?.sessionToken || "",
       action,
       payload,
       state
+    }).then((result) => {
+      if (result?.sessionExpired) {
+        forceLogout("This Engineer login was used on another device. Please login again.");
+        return;
+      }
+      if (result?.error) {
+        app.showSyncStatus(result.error.message || "Sync failed. Data is still cached on this device.", "error");
+        return;
+      }
+      if (result?.skipped) {
+        app.showSyncStatus("Saved locally. Add Apps Script settings to enable cloud sync.", "idle");
+        return;
+      }
+      app.showSyncStatus("Saved to Google Sheet and Drive successfully.", "success");
     });
   }
 
@@ -493,18 +535,24 @@
     renderSiteList();
   }
 
-  async function syncFromGoogleState() {
+  async function syncFromGoogleState(options = {}) {
+    const { silent = false } = options;
+    if (!engineerSession?.userId || !engineerSession?.sessionToken) return;
     if (engineerSyncButton) {
       engineerSyncButton.disabled = true;
       engineerSyncButton.textContent = "Syncing...";
     }
-    const remoteState = await app.fetchGoogleState(state.settings.engineer);
-    if (remoteState) {
-      state.options = { ...state.options, ...(remoteState.options || {}) };
-      state.drafts = Array.isArray(remoteState.drafts) ? remoteState.drafts : state.drafts;
-      state.tasks = Array.isArray(remoteState.tasks) ? remoteState.tasks : state.tasks;
-      app.writeState(state);
-      renderSiteList();
+    if (!silent) app.showSyncStatus("Fetching latest updates from Google Sheets and Drive...", "working", true);
+    const remoteState = await app.fetchGoogleState(state.settings.engineer, engineerSession);
+    if (remoteState?.sessionExpired) {
+      forceLogout("This Engineer login was used on another device. Please login again.");
+      return;
+    }
+    if (remoteState?.ok && remoteState.state) {
+      applyRemoteState(remoteState.state);
+      if (!silent) app.showSyncStatus("Latest updates synced on this device.", "success");
+    } else if (!silent && !remoteState) {
+      app.showSyncStatus("Unable to reach Google right now. Cached data is still available.", "error");
     }
     if (engineerSyncButton) {
       engineerSyncButton.disabled = false;
@@ -512,16 +560,42 @@
     }
   }
 
+  async function validateActiveSession(options = {}) {
+    const { silent = true } = options;
+    if (!engineerSession?.userId || !engineerSession?.sessionToken) {
+      if (engineerSession) forceLogout("Session expired. Please login again.");
+      return false;
+    }
+    const result = await app.validateGoogleSession(state.settings.engineer, engineerSession);
+    if (result?.ok) return true;
+    if (result?.sessionExpired) {
+      forceLogout("This Engineer login was used on another device. Please login again.");
+      return false;
+    }
+    if (!silent) {
+      app.showSyncStatus(result?.message || "Unable to validate session right now.", "error");
+    }
+    return true;
+  }
+
   function startCrossDeviceSync() {
     clearInterval(syncTimer);
-    if (!state.settings.engineer.googleScriptUrl || state.settings.engineer.autoSyncEnabled === false) return;
-    syncFromGoogleState();
-    syncTimer = setInterval(syncFromGoogleState, 10000);
+    clearInterval(sessionTimer);
+    if (!state.settings.engineer.googleScriptUrl || !engineerSession?.userId || !engineerSession?.sessionToken) return;
+    sessionTimer = setInterval(() => {
+      validateActiveSession({ silent: true });
+    }, 15000);
+    if (state.settings.engineer.autoSyncEnabled === false) return;
+    syncTimer = setInterval(() => {
+      syncFromGoogleState({ silent: true });
+    }, 10000);
   }
 
   function stopCrossDeviceSync() {
     clearInterval(syncTimer);
+    clearInterval(sessionTimer);
     syncTimer = null;
+    sessionTimer = null;
   }
 
   function showLogin() {
@@ -540,6 +614,19 @@
 
   function closeSettings() {
     document.getElementById("engineer-settings-modal").classList.add("hidden");
+  }
+
+  function clearCacheAndReset() {
+    const confirmed = window.confirm("Clear all cached Bliss TaskPro data on this device and logout?");
+    if (!confirmed) return;
+    stopCrossDeviceSync();
+    app.clearLocalCache();
+    engineerSession = null;
+    currentEngineer = "";
+    engineerUserId = "";
+    state = app.readState();
+    app.showSyncStatus("Cache cleared on this device.", "success");
+    window.location.reload();
   }
 
   async function autofillEngineerSettings() {
@@ -561,22 +648,26 @@
       return;
     }
     debug.classList.add("hidden");
-    currentEngineer = result.user.name || result.user.userId;
-    engineerUserId = result.user.userId || "";
+    engineerSession = {
+      userId: result.user.userId || "",
+      name: result.user.name || result.user.userId,
+      role: "engineer",
+      sessionToken: result.sessionToken || "",
+      sessionUpdatedAt: result.sessionUpdatedAt || ""
+    };
+    currentEngineer = engineerSession.name;
+    engineerUserId = engineerSession.userId;
     await autofillEngineerSettings();
-    app.saveEngineerSession(currentEngineer);
+    app.saveEngineerSession(engineerSession);
     refreshState();
+    await syncFromGoogleState({ silent: false });
+    if (!engineerSession) return;
     startCrossDeviceSync();
     showApp();
   });
 
   document.getElementById("engineer-logout").addEventListener("click", () => {
-    currentEngineer = "";
-    engineerUserId = "";
-    activeTaskId = "";
-    app.clearEngineerSession();
-    stopCrossDeviceSync();
-    showLogin();
+    forceLogout("");
   });
 
   document.getElementById("close-engineer-map-modal").addEventListener("click", closeMap);
@@ -587,6 +678,7 @@
   document.getElementById("engineer-advanced-settings-toggle").addEventListener("click", () => {
     document.getElementById("engineer-advanced-settings").classList.toggle("hidden");
   });
+  document.getElementById("engineer-clear-cache").addEventListener("click", clearCacheAndReset);
   document.getElementById("close-engineer-settings-modal").addEventListener("click", closeSettings);
   document.getElementById("engineer-save-google-settings").addEventListener("click", () => {
     state.settings.engineer = app.mergeGoogleSettings(state.settings.engineer, {
@@ -600,6 +692,7 @@
     autofillEngineerSettings().finally(() => {
       refreshState();
       saveState("saveGoogleSetting", { ...state.settings.engineer });
+      syncFromGoogleState({ silent: false });
       startCrossDeviceSync();
       closeSettings();
     });
@@ -609,8 +702,14 @@
     refreshState();
     if (currentEngineer) renderSiteList();
   });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden || !engineerSession) return;
+    validateActiveSession({ silent: true }).then((isValid) => {
+      if (isValid) syncFromGoogleState({ silent: true });
+    });
+  });
 
-  (function init() {
+  (async function init() {
     refreshState();
     if (!state.options.districts.length) {
       app.loadDistricts().then((districts) => {
@@ -618,7 +717,10 @@
         app.writeState(state);
       }).catch(() => {});
     }
-    if (currentEngineer) {
+    if (engineerSession) {
+      const isValid = await validateActiveSession({ silent: true });
+      if (!isValid) return;
+      await syncFromGoogleState({ silent: true });
       startCrossDeviceSync();
       showApp();
     } else showLogin();

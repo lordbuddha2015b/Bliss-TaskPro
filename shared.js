@@ -18,14 +18,14 @@
         googleSheetId: "",
         googleDocumentFolderId: "",
         googlePhotoFolderId: "",
-        autoSyncEnabled: true
+        autoSyncEnabled: false
       },
       engineer: {
         googleScriptUrl: "",
         googleSheetId: "",
         googleDocumentFolderId: "",
         googlePhotoFolderId: "",
-        autoSyncEnabled: true
+        autoSyncEnabled: false
       }
     },
     drafts: [],
@@ -98,6 +98,13 @@
 
   function writeSettings(settings) {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }
+
+  function clearLocalCache() {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(SETTINGS_KEY);
+    sessionStorage.removeItem(MASTER_SESSION_KEY);
+    sessionStorage.removeItem(ENGINEER_SESSION_KEY);
   }
 
   function uid(prefix) {
@@ -197,18 +204,19 @@
     const endpoint = activeSettings.googleScriptUrl;
     if (!endpoint) return { skipped: true };
     try {
-      await fetch(endpoint, {
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ ...payload, state: sanitizeStateForStorage(state), activeSettings })
       });
-      return { skipped: false };
+      const data = await response.json();
+      return data?.ok === false ? { skipped: false, error: new Error(data.message || data.error || "Sync failed"), sessionExpired: !!data.sessionExpired } : { skipped: false, data };
     } catch (error) {
       return { skipped: false, error };
     }
   }
 
-  async function fetchGoogleTask(settings, siteId) {
+  async function fetchGoogleTask(settings, siteId, session) {
     const endpoint = settings.googleScriptUrl;
     if (!endpoint || !siteId) return null;
     try {
@@ -218,6 +226,9 @@
       url.searchParams.set("sheetId", settings.googleSheetId || "");
       url.searchParams.set("documentFolderId", settings.googleDocumentFolderId || "");
       url.searchParams.set("photoFolderId", settings.googlePhotoFolderId || "");
+      url.searchParams.set("source", session?.role || "");
+      url.searchParams.set("userId", session?.userId || "");
+      url.searchParams.set("sessionToken", session?.sessionToken || "");
       const response = await fetch(url.toString(), {
         headers: {
           Accept: "application/json"
@@ -229,7 +240,7 @@
     }
   }
 
-  async function fetchGoogleState(settings) {
+  async function fetchGoogleState(settings, session) {
     const endpoint = settings.googleScriptUrl;
     if (!endpoint) return null;
     try {
@@ -238,13 +249,16 @@
       url.searchParams.set("sheetId", settings.googleSheetId || "");
       url.searchParams.set("documentFolderId", settings.googleDocumentFolderId || "");
       url.searchParams.set("photoFolderId", settings.googlePhotoFolderId || "");
+      url.searchParams.set("source", session?.role || "");
+      url.searchParams.set("userId", session?.userId || "");
+      url.searchParams.set("sessionToken", session?.sessionToken || "");
       const response = await fetch(url.toString(), {
         headers: {
           Accept: "application/json"
         }
       });
       const data = await response.json();
-      return data?.ok ? data.state || null : null;
+      return data || null;
     } catch (error) {
       return null;
     }
@@ -309,7 +323,7 @@
       googlePhotoFolderId: sanitizeGoogleValue(nextSettings?.googlePhotoFolderId) || currentSettings?.googlePhotoFolderId || "",
       autoSyncEnabled: typeof nextSettings?.autoSyncEnabled === "boolean"
         ? nextSettings.autoSyncEnabled
-        : currentSettings?.autoSyncEnabled ?? true
+        : currentSettings?.autoSyncEnabled ?? false
     };
   }
 
@@ -345,8 +359,61 @@
     }
   }
 
-  function saveEngineerSession(name) {
-    sessionStorage.setItem(ENGINEER_SESSION_KEY, name);
+  async function validateGoogleSession(settings, session) {
+    const endpoint = settings.googleScriptUrl;
+    if (!endpoint || !session?.userId || !session?.sessionToken) return { ok: false, sessionExpired: true };
+    try {
+      const url = new URL(endpoint);
+      url.searchParams.set("action", "validateSession");
+      url.searchParams.set("sheetId", settings.googleSheetId || "");
+      url.searchParams.set("documentFolderId", settings.googleDocumentFolderId || "");
+      url.searchParams.set("photoFolderId", settings.googlePhotoFolderId || "");
+      url.searchParams.set("role", session.role || "");
+      url.searchParams.set("userId", session.userId || "");
+      url.searchParams.set("sessionToken", session.sessionToken || "");
+      const response = await fetch(url.toString(), {
+        headers: {
+          Accept: "application/json"
+        }
+      });
+      return await response.json();
+    } catch (error) {
+      return { ok: false, message: "Unable to validate session." };
+    }
+  }
+
+  function getStatusHost() {
+    let host = document.getElementById("floating-sync-status");
+    if (host) return host;
+    host = document.createElement("div");
+    host.id = "floating-sync-status";
+    host.className = "floating-sync-status hidden";
+    host.innerHTML = '<div class="floating-sync-status__bar"></div><div class="floating-sync-status__text"></div>';
+    document.body.appendChild(host);
+    return host;
+  }
+
+  function showSyncStatus(message, tone = "working", persist = false) {
+    const host = getStatusHost();
+    host.className = `floating-sync-status tone-${tone}`;
+    host.querySelector(".floating-sync-status__text").textContent = message;
+    host.classList.remove("hidden");
+    if (!persist) {
+      clearTimeout(showSyncStatus.timeoutId);
+      showSyncStatus.timeoutId = setTimeout(() => {
+        host.classList.add("hidden");
+      }, tone === "working" ? 120000 : 2600);
+    }
+  }
+
+  function hideSyncStatus() {
+    const host = document.getElementById("floating-sync-status");
+    clearTimeout(showSyncStatus.timeoutId);
+    if (host) host.classList.add("hidden");
+  }
+
+  function saveEngineerSession(session) {
+    sessionStorage.setItem(ENGINEER_SESSION_KEY, JSON.stringify(session));
   }
 
   function saveMasterSession(data) {
@@ -355,7 +422,12 @@
 
   function getMasterSession() {
     const raw = sessionStorage.getItem(MASTER_SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      return null;
+    }
   }
 
   function clearMasterSession() {
@@ -363,7 +435,16 @@
   }
 
   function getEngineerSession() {
-    return sessionStorage.getItem(ENGINEER_SESSION_KEY) || "";
+    const raw = sessionStorage.getItem(ENGINEER_SESSION_KEY);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object"
+        ? parsed
+        : { userId: "", name: String(parsed || ""), role: "engineer", sessionToken: "" };
+    } catch (error) {
+      return { userId: "", name: raw, role: "engineer", sessionToken: "" };
+    }
   }
 
   function clearEngineerSession() {
@@ -373,6 +454,7 @@
   window.BlissTaskPro = {
     readState,
     writeState,
+    clearLocalCache,
     uid,
     formatDate,
     statusClass,
@@ -389,7 +471,10 @@
     reverseGeocodeDistrict,
     loginWithGoogle,
     fetchGoogleConfig,
+    validateGoogleSession,
     mergeGoogleSettings,
+    showSyncStatus,
+    hideSyncStatus,
     saveMasterSession,
     getMasterSession,
     clearMasterSession,

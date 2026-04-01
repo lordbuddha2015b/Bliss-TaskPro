@@ -9,6 +9,7 @@
   let map;
   let mapMarker;
   let syncTimer = null;
+  let sessionTimer = null;
 
   const navButtons = document.querySelectorAll("[data-page-target]");
   const sections = document.querySelectorAll(".page-section");
@@ -57,15 +58,53 @@
     document.getElementById("master-user-eyebrow").textContent = "Field Task Monitor";
   }
 
+  function applyRemoteState(remoteState) {
+    if (!remoteState) return;
+    state.options = { ...state.options, ...(remoteState.options || {}) };
+    state.drafts = Array.isArray(remoteState.drafts) ? remoteState.drafts : state.drafts;
+    state.tasks = Array.isArray(remoteState.tasks) ? remoteState.tasks : state.tasks;
+    app.writeState(state);
+    refreshAll();
+    if (currentOpenTaskId) openTaskDetailModal(currentOpenTaskId);
+  }
+
+  function forceLogout(message) {
+    masterSession = null;
+    app.clearMasterSession();
+    stopCrossDeviceSync();
+    if (message) {
+      app.showSyncStatus(message, "error");
+      window.alert(message);
+    }
+    showMasterLogin();
+  }
+
   function saveState(action, payload) {
     app.writeState(state);
+    if (!masterSession?.userId || !masterSession?.sessionToken) return;
+    app.showSyncStatus("Saving data to Google Sheet and Drive...", "working", true);
     app.postGoogleSync(state, {
       app: "Bliss TaskPro",
       source: "master",
       userId: masterSession?.userId || "",
+      sessionToken: masterSession?.sessionToken || "",
       action,
       payload,
       state
+    }).then((result) => {
+      if (result?.sessionExpired) {
+        forceLogout("This Master login was used on another device. Please login again.");
+        return;
+      }
+      if (result?.error) {
+        app.showSyncStatus(result.error.message || "Sync failed. Data is still cached on this device.", "error");
+        return;
+      }
+      if (result?.skipped) {
+        app.showSyncStatus("Saved locally. Add Apps Script settings to enable cloud sync.", "idle");
+        return;
+      }
+      app.showSyncStatus("Saved to Google Sheet and Drive successfully.", "success");
     });
   }
 
@@ -431,7 +470,11 @@
       return;
     }
 
-    const remote = await app.fetchGoogleTask(state.settings.engineer, task.siteId);
+    const remote = await app.fetchGoogleTask(state.settings.master, task.siteId, masterSession);
+    if (remote?.sessionExpired) {
+      forceLogout("This Master login was used on another device. Please login again.");
+      return;
+    }
     const latestRow = remote?.latestRow || {};
     const latestDocuments = safeJsonParse(latestRow["Documents JSON"]);
     const latestPhotos = safeJsonParse(latestRow["Photos JSON"]);
@@ -639,19 +682,24 @@
     renderStats();
   }
 
-  async function syncFromGoogleState() {
+  async function syncFromGoogleState(options = {}) {
+    const { silent = false } = options;
+    if (!masterSession?.userId || !masterSession?.sessionToken) return;
     if (masterSyncButton) {
       masterSyncButton.disabled = true;
       masterSyncButton.textContent = "Syncing...";
     }
-    const remoteState = await app.fetchGoogleState(state.settings.master);
-    if (remoteState) {
-      state.options = { ...state.options, ...(remoteState.options || {}) };
-      state.drafts = Array.isArray(remoteState.drafts) ? remoteState.drafts : state.drafts;
-      state.tasks = Array.isArray(remoteState.tasks) ? remoteState.tasks : state.tasks;
-      app.writeState(state);
-      refreshAll();
-      if (currentOpenTaskId) openTaskDetailModal(currentOpenTaskId);
+    if (!silent) app.showSyncStatus("Fetching latest updates from Google Sheets and Drive...", "working", true);
+    const remoteState = await app.fetchGoogleState(state.settings.master, masterSession);
+    if (remoteState?.sessionExpired) {
+      forceLogout("This Master login was used on another device. Please login again.");
+      return;
+    }
+    if (remoteState?.ok && remoteState.state) {
+      applyRemoteState(remoteState.state);
+      if (!silent) app.showSyncStatus("Latest updates synced on this device.", "success");
+    } else if (!silent && !remoteState) {
+      app.showSyncStatus("Unable to reach Google right now. Cached data is still available.", "error");
     }
     if (masterSyncButton) {
       masterSyncButton.disabled = false;
@@ -659,16 +707,42 @@
     }
   }
 
+  async function validateActiveSession(options = {}) {
+    const { silent = true } = options;
+    if (!masterSession?.userId || !masterSession?.sessionToken) {
+      if (masterSession) forceLogout("Session expired. Please login again.");
+      return false;
+    }
+    const result = await app.validateGoogleSession(state.settings.master, masterSession);
+    if (result?.ok) return true;
+    if (result?.sessionExpired) {
+      forceLogout("This Master login was used on another device. Please login again.");
+      return false;
+    }
+    if (!silent) {
+      app.showSyncStatus(result?.message || "Unable to validate session right now.", "error");
+    }
+    return true;
+  }
+
   function startCrossDeviceSync() {
     clearInterval(syncTimer);
-    if (!state.settings.master.googleScriptUrl || state.settings.master.autoSyncEnabled === false) return;
-    syncFromGoogleState();
-    syncTimer = setInterval(syncFromGoogleState, 10000);
+    clearInterval(sessionTimer);
+    if (!state.settings.master.googleScriptUrl || !masterSession?.userId || !masterSession?.sessionToken) return;
+    sessionTimer = setInterval(() => {
+      validateActiveSession({ silent: true });
+    }, 15000);
+    if (state.settings.master.autoSyncEnabled === false) return;
+    syncTimer = setInterval(() => {
+      syncFromGoogleState({ silent: true });
+    }, 10000);
   }
 
   function stopCrossDeviceSync() {
     clearInterval(syncTimer);
+    clearInterval(sessionTimer);
     syncTimer = null;
+    sessionTimer = null;
   }
 
   function openMap() {
@@ -759,6 +833,17 @@
 
   function closeSettings() {
     document.getElementById("settings-modal").classList.add("hidden");
+  }
+
+  function clearCacheAndReset() {
+    const confirmed = window.confirm("Clear all cached Bliss TaskPro data on this device and logout?");
+    if (!confirmed) return;
+    stopCrossDeviceSync();
+    app.clearLocalCache();
+    masterSession = null;
+    state = app.readState();
+    app.showSyncStatus("Cache cleared on this device.", "success");
+    window.location.reload();
   }
 
   async function autofillMasterSettings() {
@@ -896,6 +981,7 @@
   document.getElementById("master-advanced-settings-toggle").addEventListener("click", () => {
     document.getElementById("master-advanced-settings").classList.toggle("hidden");
   });
+  document.getElementById("master-clear-cache").addEventListener("click", clearCacheAndReset);
   document.getElementById("close-settings-modal").addEventListener("click", closeSettings);
   document.getElementById("save-google-settings").addEventListener("click", () => {
     state.settings.master = app.mergeGoogleSettings(state.settings.master, {
@@ -909,6 +995,7 @@
     autofillMasterSettings().finally(() => {
       refreshAll();
       saveState("saveGoogleSetting", { ...state.settings.master });
+      syncFromGoogleState({ silent: false });
       startCrossDeviceSync();
       closeSettings();
     });
@@ -930,11 +1017,15 @@
     masterSession = {
       userId: result.user.userId,
       name: result.user.name || result.user.userId,
-      role: result.user.role
+      role: "master",
+      sessionToken: result.sessionToken || "",
+      sessionUpdatedAt: result.sessionUpdatedAt || ""
     };
     await autofillMasterSettings();
     app.saveMasterSession(masterSession);
     refreshAll();
+    await syncFromGoogleState({ silent: false });
+    if (!masterSession) return;
     startCrossDeviceSync();
     showMasterApp();
   });
@@ -953,6 +1044,12 @@
     refreshAll();
     if (currentOpenTaskId) openTaskDetailModal(currentOpenTaskId);
   });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden || !masterSession) return;
+    validateActiveSession({ silent: true }).then((isValid) => {
+      if (isValid) syncFromGoogleState({ silent: true });
+    });
+  });
 
   (async function init() {
     try {
@@ -964,6 +1061,9 @@
     assignDate.value = new Date().toISOString().split("T")[0];
     refreshAll();
     if (masterSession) {
+      const isValid = await validateActiveSession({ silent: true });
+      if (!isValid) return;
+      await syncFromGoogleState({ silent: true });
       startCrossDeviceSync();
       showMasterApp();
     } else showMasterLogin();

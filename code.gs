@@ -27,7 +27,7 @@ const ENGINEER_HEADERS = [
   'Measurement Text', 'Documents JSON', 'Photos JSON', 'Measurement Images JSON', 'Settings JSON'
 ];
 
-const USER_HEADERS = ['User ID', 'Password', 'Role', 'Display Name', 'Status'];
+const USER_HEADERS = ['User ID', 'Password', 'Role', 'Display Name', 'Status', 'Session Token', 'Session Updated At'];
 const APP_STATE_HEADERS = ['Timestamp', 'Source', 'State JSON'];
 
 function doGet(e) {
@@ -37,6 +37,9 @@ function doGet(e) {
   }
   if (action === 'getState') {
     return jsonOutput(getLatestAppState_(e.parameter || {}));
+  }
+  if (action === 'validateSession') {
+    return jsonOutput(validateSessionFromParams_(e.parameter || {}));
   }
   return jsonOutput({
     ok: true,
@@ -59,6 +62,14 @@ function doPost(e) {
 
     if (action === 'login') {
       return jsonOutput(loginUser_(activeSettings, task));
+    }
+    if (action === 'validateSession') {
+      return jsonOutput(validateSession_(activeSettings, payload));
+    }
+
+    const sessionCheck = validateSession_(activeSettings, payload);
+    if (!sessionCheck.ok) {
+      return jsonOutput(sessionCheck);
     }
 
     const sheet = getAppSheet_(activeSettings, source);
@@ -202,6 +213,10 @@ function getTaskSnapshot_(params) {
     googleDocumentFolderId: params.documentFolderId || '',
     googlePhotoFolderId: params.photoFolderId || ''
   };
+  const sessionCheck = validateSessionFromParams_(params);
+  if (!sessionCheck.ok) {
+    return sessionCheck;
+  }
   const siteId = params.siteId || '';
   const sheet = getOrCreateSheet_(getSpreadsheet_(settings), SHEET_NAMES.engineer);
   const values = sheet.getDataRange().getValues();
@@ -306,23 +321,234 @@ function getLatestAppState_(params) {
     googleDocumentFolderId: params.documentFolderId || '',
     googlePhotoFolderId: params.photoFolderId || ''
   };
+  const sessionCheck = validateSessionFromParams_(params);
+  if (!sessionCheck.ok) {
+    return sessionCheck;
+  }
   const sheet = getStateSheet_(settings);
   ensureAppStateSheet_(sheet);
   const values = sheet.getDataRange().getValues();
-  if (values.length <= 1) {
-    return { ok: true, state: null };
+  var latestState = null;
+  if (values.length > 1) {
+    const latest = values[values.length - 1];
+    try {
+      latestState = JSON.parse(String(latest[2] || '{}'));
+    } catch (error) {
+      return {
+        ok: false,
+        message: 'Invalid state JSON in App_State sheet.'
+      };
+    }
   }
-  const latest = values[values.length - 1];
+  return {
+    ok: true,
+    state: buildLatestMergedState_(settings, latestState)
+  };
+}
+
+function buildLatestMergedState_(settings, baseState) {
+  var state = normalizeAppState_(baseState || {});
+  var latestMasterTasks = getLatestTasksFromSheet_(getAppSheet_(settings, 'master'), 'master');
+  var latestEngineerTasks = getLatestTasksFromSheet_(getAppSheet_(settings, 'engineer'), 'engineer');
+  var taskMap = {};
+
+  state.tasks.forEach(function(task) {
+    if (!task || !task.id) return;
+    taskMap[task.id] = normalizeTaskRecord_(task);
+  });
+
+  latestMasterTasks.forEach(function(task) {
+    if (!task || !task.id) return;
+    taskMap[task.id] = mergeTaskRecords_(taskMap[task.id], task);
+  });
+
+  latestEngineerTasks.forEach(function(task) {
+    if (!task || !task.id) return;
+    taskMap[task.id] = mergeTaskRecords_(taskMap[task.id], task);
+  });
+
+  state.tasks = Object.keys(taskMap).map(function(key) {
+    return normalizeTaskRecord_(taskMap[key]);
+  }).sort(function(a, b) {
+    return String(a.createdAt || a.updatedAt || '').localeCompare(String(b.createdAt || b.updatedAt || ''));
+  });
+
+  state.options = buildLatestOptions_(state);
+  return state;
+}
+
+function buildLatestOptions_(state) {
+  var options = state.options || {};
+  return {
+    clients: dedupeNonEmpty_((options.clients || []).concat(state.tasks.map(function(task) { return task.client; }))),
+    engineers: dedupeNonEmpty_((options.engineers || []).concat(state.tasks.map(function(task) { return task.engineer; }))),
+    categories: dedupeNonEmpty_((options.categories || []).concat(state.tasks.map(function(task) { return task.category; }))),
+    activities: dedupeNonEmpty_((options.activities || []).concat(state.tasks.map(function(task) { return task.activity; }))),
+    districts: dedupeNonEmpty_((options.districts || []).concat(state.tasks.map(function(task) { return task.district; })))
+  };
+}
+
+function dedupeNonEmpty_(values) {
+  var seen = {};
+  return (values || [])
+    .map(function(value) { return String(value || '').trim(); })
+    .filter(function(value) {
+      if (!value || seen[value]) return false;
+      seen[value] = true;
+      return true;
+    })
+    .sort();
+}
+
+function normalizeAppState_(state) {
+  return {
+    options: {
+      clients: Array.isArray(state.options && state.options.clients) ? state.options.clients : [],
+      engineers: Array.isArray(state.options && state.options.engineers) ? state.options.engineers : [],
+      categories: Array.isArray(state.options && state.options.categories) ? state.options.categories : [],
+      activities: Array.isArray(state.options && state.options.activities) ? state.options.activities : [],
+      districts: Array.isArray(state.options && state.options.districts) ? state.options.districts : []
+    },
+    settings: state.settings || {},
+    drafts: Array.isArray(state.drafts) ? state.drafts : [],
+    tasks: Array.isArray(state.tasks) ? state.tasks : []
+  };
+}
+
+function getLatestTasksFromSheet_(sheet, source) {
+  ensureAppSheet_(sheet, source);
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return [];
+  var header = values.shift();
+  var latestByTaskId = {};
+
+  values.forEach(function(row) {
+    var mapped = mapRow_(header, row);
+    var taskId = String(mapped['Task ID'] || '').trim();
+    if (!taskId) return;
+    latestByTaskId[taskId] = source === 'engineer'
+      ? engineerRowToTask_(mapped)
+      : masterRowToTask_(mapped);
+  });
+
+  return Object.keys(latestByTaskId).map(function(taskId) {
+    return latestByTaskId[taskId];
+  });
+}
+
+function masterRowToTask_(row) {
+  return normalizeTaskRecord_({
+    id: row['Task ID'] || '',
+    siteId: row['Site ID'] || '',
+    client: row.Client || '',
+    engineer: row.Engineer || '',
+    category: row.Category || '',
+    activity: row.Activity || '',
+    date: row['Task Date'] || '',
+    location: row.Location || '',
+    latitude: row.Latitude || '',
+    longitude: row.Longitude || '',
+    district: row.District || '',
+    instructions: row.Instructions || '',
+    status: row.Status || 'Pending',
+    rollbackReason: row['Rollback Reason'] || '',
+    updatedAt: toIsoString_(row.Timestamp)
+  });
+}
+
+function engineerRowToTask_(row) {
+  return normalizeTaskRecord_({
+    id: row['Task ID'] || '',
+    siteId: row['Site ID'] || '',
+    engineer: row.Engineer || '',
+    siteEngineerName: row['Site Engineer Name'] || '',
+    status: row.Status || '',
+    date: row['Task Date'] || '',
+    location: row.Location || '',
+    district: row.District || '',
+    measurementText: row['Measurement Text'] || '',
+    documents: parseJsonArray_(row['Documents JSON']),
+    photos: parseJsonArray_(row['Photos JSON']),
+    measurementImages: parseJsonArray_(row['Measurement Images JSON']),
+    gps: (row['GPS Latitude'] || row['GPS Longitude']) ? {
+      latitude: row['GPS Latitude'] || '',
+      longitude: row['GPS Longitude'] || ''
+    } : null,
+    updatedAt: toIsoString_(row.Timestamp)
+  });
+}
+
+function mergeTaskRecords_(baseTask, patchTask) {
+  var base = normalizeTaskRecord_(baseTask || {});
+  var patch = normalizeTaskRecord_(patchTask || {});
+  return normalizeTaskRecord_({
+    id: patch.id || base.id || '',
+    draftId: patch.draftId || base.draftId || '',
+    client: patch.client || base.client || '',
+    engineer: patch.engineer || base.engineer || '',
+    category: patch.category || base.category || '',
+    activity: patch.activity || base.activity || '',
+    siteId: patch.siteId || base.siteId || '',
+    date: patch.date || base.date || '',
+    location: patch.location || base.location || '',
+    latitude: patch.latitude || base.latitude || '',
+    longitude: patch.longitude || base.longitude || '',
+    district: patch.district || base.district || '',
+    instructions: patch.instructions || base.instructions || '',
+    status: patch.status || base.status || 'Pending',
+    siteEngineerName: patch.siteEngineerName || base.siteEngineerName || '',
+    documents: pickLatestArray_(patch.documents, base.documents),
+    photos: pickLatestArray_(patch.photos, base.photos),
+    measurementText: patch.measurementText || base.measurementText || '',
+    measurementImages: pickLatestArray_(patch.measurementImages, base.measurementImages),
+    gps: patch.gps || base.gps || null,
+    sharePackage: patch.sharePackage || base.sharePackage || null,
+    rollbackReason: patch.rollbackReason || base.rollbackReason || '',
+    createdAt: base.createdAt || patch.createdAt || patch.updatedAt || '',
+    updatedAt: patch.updatedAt || base.updatedAt || ''
+  });
+}
+
+function normalizeTaskRecord_(task) {
+  return {
+    id: task.id || '',
+    draftId: task.draftId || '',
+    client: task.client || '',
+    engineer: task.engineer || '',
+    category: task.category || '',
+    activity: task.activity || '',
+    siteId: task.siteId || '',
+    date: task.date || '',
+    location: task.location || '',
+    latitude: task.latitude || '',
+    longitude: task.longitude || '',
+    district: task.district || '',
+    instructions: task.instructions || '',
+    status: task.status || 'Pending',
+    siteEngineerName: task.siteEngineerName || '',
+    documents: Array.isArray(task.documents) ? task.documents : [],
+    photos: Array.isArray(task.photos) ? task.photos : [],
+    measurementText: task.measurementText || '',
+    measurementImages: Array.isArray(task.measurementImages) ? task.measurementImages : [],
+    gps: task.gps || null,
+    sharePackage: task.sharePackage || null,
+    rollbackReason: task.rollbackReason || '',
+    createdAt: task.createdAt || '',
+    updatedAt: task.updatedAt || ''
+  };
+}
+
+function pickLatestArray_(preferred, fallback) {
+  if (Array.isArray(preferred) && preferred.length) return preferred;
+  return Array.isArray(fallback) ? fallback : [];
+}
+
+function parseJsonArray_(value) {
   try {
-    return {
-      ok: true,
-      state: JSON.parse(String(latest[2] || '{}'))
-    };
+    var parsed = JSON.parse(String(value || '[]'));
+    return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
-    return {
-      ok: false,
-      message: 'Invalid state JSON in App_State sheet.'
-    };
+    return [];
   }
 }
 
@@ -372,14 +598,103 @@ function loginUser_(settings, payload) {
     return { ok: false, message: 'Role mismatch in ' + sheetName + ' for user ID: ' + payload.userId };
   }
 
+  var userRowIndex = rows.indexOf(user) + 2;
+  var sessionToken = createSessionToken_();
+  var sessionUpdatedAt = new Date().toISOString();
+  sheet.getRange(userRowIndex, 6, 1, 2).setValues([[sessionToken, sessionUpdatedAt]]);
+
   return {
     ok: true,
     user: {
       userId: user[0],
       role: user[2],
       name: user[3] || user[0]
-    }
+    },
+    sessionToken: sessionToken,
+    sessionUpdatedAt: sessionUpdatedAt
   };
+}
+
+function validateSessionFromParams_(params) {
+  const settings = {
+    googleSheetId: params.sheetId || '',
+    googleDocumentFolderId: params.documentFolderId || '',
+    googlePhotoFolderId: params.photoFolderId || ''
+  };
+  return validateSession_(settings, {
+    source: params.source || params.role || '',
+    userId: params.userId || '',
+    sessionToken: params.sessionToken || ''
+  });
+}
+
+function validateSession_(settings, payload) {
+  var requestedRole = String(payload.source || payload.role || '').toLowerCase();
+  var userId = String(payload.userId || '').trim();
+  var sessionToken = String(payload.sessionToken || '').trim();
+  if (!requestedRole || !userId || !sessionToken) {
+    return {
+      ok: false,
+      sessionExpired: true,
+      message: 'Missing session details.'
+    };
+  }
+
+  var sheet = getCredentialSheet_(settings, requestedRole === 'master' ? 'master' : 'engineer');
+  ensureCredentialSheet_(sheet);
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) {
+    return {
+      ok: false,
+      sessionExpired: true,
+      message: 'Credential sheet is empty.'
+    };
+  }
+
+  var rows = values.slice(1);
+  var user = rows.find(function(row) {
+    return String(row[0] || '').trim().toLowerCase() === userId.toLowerCase();
+  });
+  if (!user) {
+    return {
+      ok: false,
+      sessionExpired: true,
+      message: 'User session not found.'
+    };
+  }
+
+  var activeToken = String(user[5] || '').trim();
+  var status = String(user[4] || 'ACTIVE').toUpperCase();
+  if (status === 'INACTIVE' || !activeToken || activeToken !== sessionToken) {
+    return {
+      ok: false,
+      sessionExpired: true,
+      message: 'Session expired. Please login again.'
+    };
+  }
+
+  return {
+    ok: true,
+    sessionExpired: false,
+    user: {
+      userId: user[0],
+      role: user[2],
+      name: user[3] || user[0]
+    },
+    sessionUpdatedAt: user[6] || ''
+  };
+}
+
+function createSessionToken_() {
+  return Utilities.getUuid() + '-' + new Date().getTime();
+}
+
+function toIsoString_(value) {
+  if (!value) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  return String(value);
 }
 
 function safeJson_(value) {
