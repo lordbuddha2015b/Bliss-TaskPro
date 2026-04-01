@@ -563,14 +563,18 @@ tbody td {
   place-items: center;
   padding: 20px;
   background: rgba(46, 36, 71, 0.48);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-card {
   width: min(760px, 100%);
+  max-height: calc(100vh - 40px);
   border-radius: 30px;
   padding: 20px;
   background: var(--panel-strong);
   box-shadow: var(--shadow);
+  overflow-y: auto;
 }
 
 .modal-card-lg {
@@ -720,6 +724,16 @@ tbody td {
   .modal-footer,
   .section-header { flex-direction: column; align-items: stretch; }
   .task-hero { grid-template-columns: 1fr; }
+  .modal {
+    place-items: start center;
+    padding: 12px;
+  }
+  .modal-card,
+  .modal-card-lg {
+    max-height: calc(100vh - 24px);
+    border-radius: 24px;
+    padding: 16px;
+  }
   .floating-sync-status {
     left: 16px;
     right: 16px;
