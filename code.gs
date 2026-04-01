@@ -398,7 +398,9 @@ function buildLatestMergedState_(settings, baseState) {
 
   state.tasks.forEach(function(task) {
     if (!task || !task.id || !task.siteId) return;
-    taskMap[task.id] = normalizeTaskRecord_(task);
+    var taskKey = task.baseTaskId || extractTaskBaseId_(task.id);
+    if (!taskKey) return;
+    taskMap[taskKey] = normalizeTaskRecord_(task);
   });
 
   latestMasterTasks.forEach(function(task) {
