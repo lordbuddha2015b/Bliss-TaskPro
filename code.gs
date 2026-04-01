@@ -1,6 +1,7 @@
 const CONFIG = {
   APP_NAME: 'Bliss TaskPro',
   SHEET_ID: 'PASTE_GOOGLE_SHEET_ID_HERE',
+  CREDENTIAL_SHEET_ID: '13cvKhTotizLSjae5U1uhneAjeG1KVX30aKiPb_yMMeQ',
   DOCUMENT_FOLDER_ID: 'PASTE_DOCUMENT_FOLDER_ID_HERE',
   PHOTO_FOLDER_ID: 'PASTE_PHOTO_FOLDER_ID_HERE',
   APP_URL: 'PASTE_DEPLOYED_APPS_SCRIPT_WEB_APP_URL_HERE',
@@ -172,6 +173,14 @@ function getSpreadsheet_(settings) {
   return SpreadsheetApp.openById(sheetId);
 }
 
+function getCredentialSpreadsheet_() {
+  const sheetId = CONFIG.CREDENTIAL_SHEET_ID || CONFIG.SHEET_ID;
+  if (!sheetId || sheetId.indexOf('PASTE_') === 0) {
+    throw new Error('Please update CONFIG.CREDENTIAL_SHEET_ID in code.gs');
+  }
+  return SpreadsheetApp.openById(sheetId);
+}
+
 function getAppSheet_(settings, source) {
   const spreadsheet = getSpreadsheet_(settings);
   const name = source === 'engineer' ? SHEET_NAMES.engineer : SHEET_NAMES.master;
@@ -180,7 +189,7 @@ function getAppSheet_(settings, source) {
 
 function getCredentialSheet_(settings, role) {
   var name = role === 'master' ? SHEET_NAMES.masterCredential : SHEET_NAMES.engineerCredential;
-  return getOrCreateSheet_(getSpreadsheet_(settings), name);
+  return getOrCreateSheet_(getCredentialSpreadsheet_(), name);
 }
 
 function getOrCreateSheet_(spreadsheet, name) {
@@ -266,21 +275,21 @@ function listFilesBySiteId_(folder, siteId) {
 
 function ensureAppSheet_(sheet, source) {
   if (source === 'engineer') {
-    ensureHeadersAndStyle_(sheet, ENGINEER_HEADERS, '#AE445A', '#F7DDE3');
+    ensureHeaders_(sheet, ENGINEER_HEADERS);
   } else {
-    ensureHeadersAndStyle_(sheet, MASTER_HEADERS, '#4B4376', '#E8BCB9');
+    ensureHeaders_(sheet, MASTER_HEADERS);
   }
 }
 
 function ensureCredentialSheet_(sheet) {
-  ensureHeadersAndStyle_(sheet, USER_HEADERS, '#2F6690', '#D9EEF9');
+  ensureHeaders_(sheet, USER_HEADERS);
 }
 
 function ensureAppStateSheet_(sheet) {
-  ensureHeadersAndStyle_(sheet, APP_STATE_HEADERS, '#245953', '#DDF3EE');
+  ensureHeaders_(sheet, APP_STATE_HEADERS);
 }
 
-function ensureHeadersAndStyle_(sheet, headers, headerColor, bandColor) {
+function ensureHeaders_(sheet, headers) {
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(headers);
   } else {
@@ -289,16 +298,6 @@ function ensureHeadersAndStyle_(sheet, headers, headerColor, bandColor) {
     if (mismatch) {
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     }
-  }
-  const headerRange = sheet.getRange(1, 1, 1, headers.length);
-  headerRange.setBackground(headerColor).setFontColor('#ffffff').setFontWeight('bold');
-  sheet.setFrozenRows(1);
-  const lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    sheet.getRange(2, 1, lastRow - 1, headers.length).setBackground(bandColor);
-  }
-  for (var i = 1; i <= headers.length; i++) {
-    sheet.setColumnWidth(i, 170);
   }
 }
 
@@ -556,7 +555,7 @@ function parseJsonArray_(value) {
 
 function loginUser_(settings, payload) {
   const requestedRole = String(payload.role || '').toLowerCase();
-  const spreadsheet = getSpreadsheet_(settings);
+  const spreadsheet = getCredentialSpreadsheet_();
   const sheetName = requestedRole === 'master' ? SHEET_NAMES.masterCredential : SHEET_NAMES.engineerCredential;
   const sheet = spreadsheet.getSheetByName(sheetName);
   if (!sheet) {

@@ -636,6 +636,15 @@
     app.writeState(state);
   }
 
+  async function runPostLoginRefresh(options = {}) {
+    const { silent = false } = options;
+    await autofillEngineerSettings();
+    refreshState();
+    renderSiteList();
+    await syncFromGoogleState({ silent });
+    if (engineerSession) startCrossDeviceSync();
+  }
+
   document.getElementById("engineer-login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const debug = document.getElementById("engineer-login-debug");
@@ -669,23 +678,15 @@
     };
     currentEngineer = engineerSession.name;
     engineerUserId = engineerSession.userId;
-    await autofillEngineerSettings();
     app.saveEngineerSession(engineerSession);
     refreshState();
-    await syncFromGoogleState({ silent: false });
-    if (!engineerSession) {
-      if (submitButton) {
-        submitButton.disabled = false;
-        submitButton.textContent = "Login To Engineer App";
-      }
-      return;
-    }
-    startCrossDeviceSync();
     showApp();
     if (submitButton) {
       submitButton.disabled = false;
       submitButton.textContent = "Login To Engineer App";
     }
+    app.showSyncStatus("Engineer login success. Fetching latest data in background...", "working");
+    runPostLoginRefresh({ silent: false });
   });
 
   document.getElementById("engineer-logout").addEventListener("click", () => {

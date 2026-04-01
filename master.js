@@ -853,6 +853,14 @@
     app.writeState(state);
   }
 
+  async function runPostLoginRefresh(options = {}) {
+    const { silent = false } = options;
+    await autofillMasterSettings();
+    refreshAll();
+    await syncFromGoogleState({ silent });
+    if (masterSession) startCrossDeviceSync();
+  }
+
   masterForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const form = new FormData(masterForm);
@@ -1033,23 +1041,15 @@
       sessionToken: result.sessionToken || "",
       sessionUpdatedAt: result.sessionUpdatedAt || ""
     };
-    await autofillMasterSettings();
     app.saveMasterSession(masterSession);
     refreshAll();
-    await syncFromGoogleState({ silent: false });
-    if (!masterSession) {
-      if (submitButton) {
-        submitButton.disabled = false;
-        submitButton.textContent = "Login To Master App";
-      }
-      return;
-    }
-    startCrossDeviceSync();
     showMasterApp();
     if (submitButton) {
       submitButton.disabled = false;
       submitButton.textContent = "Login To Master App";
     }
+    app.showSyncStatus("Master login success. Fetching latest data in background...", "working");
+    runPostLoginRefresh({ silent: false });
   });
   document.getElementById("master-logout").addEventListener("click", () => {
     masterSession = null;
