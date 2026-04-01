@@ -20,6 +20,7 @@
   const engineerGoogleSheetInput = document.getElementById("engineer-google-sheet-id");
   const engineerGoogleDocumentDriveInput = document.getElementById("engineer-google-document-drive-id");
   const engineerGooglePhotoDriveInput = document.getElementById("engineer-google-photo-drive-id");
+  const engineerGoogleMeasurementDriveInput = document.getElementById("engineer-google-measurement-drive-id");
   const engineerAutoSyncInput = document.getElementById("engineer-auto-sync");
   const engineerSyncButton = document.getElementById("engineer-sync-button");
 
@@ -544,6 +545,7 @@
     engineerGoogleSheetInput.value = state.settings.engineer.googleSheetId || "";
     engineerGoogleDocumentDriveInput.value = state.settings.engineer.googleDocumentFolderId || "";
     engineerGooglePhotoDriveInput.value = state.settings.engineer.googlePhotoFolderId || "";
+    engineerGoogleMeasurementDriveInput.value = state.settings.engineer.googleMeasurementFolderId || "";
     engineerAutoSyncInput.checked = state.settings.engineer.autoSyncEnabled !== false;
     renderSiteList();
   }
@@ -622,6 +624,7 @@
     engineerGoogleSheetInput.value = state.settings.engineer.googleSheetId || "";
     engineerGoogleDocumentDriveInput.value = state.settings.engineer.googleDocumentFolderId || "";
     engineerGooglePhotoDriveInput.value = state.settings.engineer.googlePhotoFolderId || "";
+    engineerGoogleMeasurementDriveInput.value = state.settings.engineer.googleMeasurementFolderId || "";
     document.getElementById("engineer-settings-modal").classList.remove("hidden");
   }
 
@@ -722,6 +725,7 @@
       googleSheetId: engineerGoogleSheetInput.value,
       googleDocumentFolderId: engineerGoogleDocumentDriveInput.value,
       googlePhotoFolderId: engineerGooglePhotoDriveInput.value,
+      googleMeasurementFolderId: engineerGoogleMeasurementDriveInput.value,
       autoSyncEnabled: engineerAutoSyncInput.checked
     });
     app.writeState(state);
