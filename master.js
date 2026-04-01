@@ -143,12 +143,13 @@
 
   function renderDrafts() {
     const host = document.getElementById("draft-list");
-    if (!state.drafts.length) {
-      host.innerHTML = app.emptyMarkup("No drafts saved.");
+    const drafts = getAvailableDrafts();
+    if (!drafts.length) {
+      host.innerHTML = app.emptyMarkup("No unassigned drafts.");
       return;
     }
 
-    host.innerHTML = state.drafts.slice().reverse().map((draft) => `
+    host.innerHTML = drafts.slice().reverse().map((draft) => `
       <article class="stack-card">
         <h5>${app.escapeHtml(draft.client)} | ${app.escapeHtml(draft.engineer)}</h5>
         <p class="meta-line">${app.escapeHtml(draft.category)} | ${app.escapeHtml(draft.activity)}</p>
