@@ -215,19 +215,34 @@ function getOrCreateSheet_(spreadsheet, name) {
 }
 
 function getDocumentFolder_(settings) {
-  const folderId = settings.googleDocumentFolderId || CONFIG.DOCUMENT_FOLDER_ID;
-  if (!folderId || folderId.indexOf('PASTE_') === 0) {
-    throw new Error('Please update document folder ID in code.gs');
-  }
-  return DriveApp.getFolderById(folderId);
+  return getDriveFolderWithFallback_(
+    CONFIG.DOCUMENT_FOLDER_ID,
+    settings.googleDocumentFolderId,
+    'Please update document folder ID in code.gs'
+  );
 }
 
 function getPhotoFolder_(settings) {
-  const folderId = settings.googlePhotoFolderId || CONFIG.PHOTO_FOLDER_ID;
-  if (!folderId || folderId.indexOf('PASTE_') === 0) {
-    throw new Error('Please update photo folder ID in code.gs');
+  return getDriveFolderWithFallback_(
+    CONFIG.PHOTO_FOLDER_ID,
+    settings.googlePhotoFolderId,
+    'Please update photo folder ID in code.gs'
+  );
+}
+
+function getDriveFolderWithFallback_(preferredId, fallbackId, errorMessage) {
+  var candidates = [preferredId, fallbackId].filter(function(id) {
+    return !!id && String(id).indexOf('PASTE_') !== 0;
+  });
+  var lastError = null;
+  for (var i = 0; i < candidates.length; i++) {
+    try {
+      return DriveApp.getFolderById(candidates[i]);
+    } catch (error) {
+      lastError = error;
+    }
   }
-  return DriveApp.getFolderById(folderId);
+  throw new Error(lastError ? lastError.message : errorMessage);
 }
 
 function findFileByName_(folder, name) {
