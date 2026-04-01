@@ -372,7 +372,7 @@ function buildLatestMergedState_(settings, baseState) {
   var taskMap = {};
 
   state.tasks.forEach(function(task) {
-    if (!task || !task.id) return;
+    if (!task || !task.id || !task.siteId) return;
     taskMap[task.id] = normalizeTaskRecord_(task);
   });
 
@@ -388,6 +388,8 @@ function buildLatestMergedState_(settings, baseState) {
 
   state.tasks = Object.keys(taskMap).map(function(key) {
     return normalizeTaskRecord_(taskMap[key]);
+  }).filter(function(task) {
+    return !!String(task.siteId || '').trim();
   }).sort(function(a, b) {
     return String(a.createdAt || a.updatedAt || '').localeCompare(String(b.createdAt || b.updatedAt || ''));
   });
@@ -444,7 +446,8 @@ function getLatestTasksFromSheet_(sheet, source) {
   values.forEach(function(row) {
     var mapped = mapRow_(header, row);
     var taskId = String(mapped['Task ID'] || '').trim();
-    if (!taskId) return;
+    var siteId = String(mapped['Site ID'] || '').trim();
+    if (!taskId || !siteId) return;
     latestByTaskId[taskId] = source === 'engineer'
       ? engineerRowToTask_(mapped)
       : masterRowToTask_(mapped);

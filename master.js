@@ -925,7 +925,7 @@
       saveState("updateTask", task);
     } else {
       const task = {
-        id: app.uid("task"),
+        id: draft.id,
         draftId: draft.id,
         client: draft.client,
         engineer: draft.engineer,
