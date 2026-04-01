@@ -639,7 +639,10 @@
       window.alert("Please enter rollback reason.");
       return;
     }
+    const nextTaskId = app.toLifecycleTaskId(task.id || task.baseTaskId || task.draftId, nextStatus);
     task.status = nextStatus;
+    task.id = nextTaskId;
+    task.baseTaskId = app.extractTaskBaseId(nextTaskId);
     task.rollbackReason = reason;
     task.updatedAt = new Date().toISOString();
     saveState("rollbackTask", { taskId, nextStatus, reason });
@@ -925,7 +928,8 @@
       saveState("updateTask", task);
     } else {
       const task = {
-        id: draft.id,
+        id: app.toLifecycleTaskId(draft.id, "Pending"),
+        baseTaskId: app.extractTaskBaseId(draft.id),
         draftId: draft.id,
         client: draft.client,
         engineer: draft.engineer,

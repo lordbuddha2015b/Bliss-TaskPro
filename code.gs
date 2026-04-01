@@ -446,21 +446,24 @@ function getLatestTasksFromSheet_(sheet, source) {
   values.forEach(function(row) {
     var mapped = mapRow_(header, row);
     var taskId = String(mapped['Task ID'] || '').trim();
+    var taskKey = extractTaskBaseId_(taskId);
     var siteId = String(mapped['Site ID'] || '').trim();
-    if (!taskId || !siteId) return;
-    latestByTaskId[taskId] = source === 'engineer'
+    if (!taskKey || !siteId) return;
+    latestByTaskId[taskKey] = source === 'engineer'
       ? engineerRowToTask_(mapped)
       : masterRowToTask_(mapped);
   });
 
-  return Object.keys(latestByTaskId).map(function(taskId) {
-    return latestByTaskId[taskId];
+  return Object.keys(latestByTaskId).map(function(taskKey) {
+    return latestByTaskId[taskKey];
   });
 }
 
 function masterRowToTask_(row) {
+  var taskId = row['Task ID'] || '';
   return normalizeTaskRecord_({
-    id: row['Task ID'] || '',
+    id: taskId,
+    baseTaskId: extractTaskBaseId_(taskId),
     siteId: row['Site ID'] || '',
     client: row.Client || '',
     engineer: row.Engineer || '',
@@ -479,8 +482,10 @@ function masterRowToTask_(row) {
 }
 
 function engineerRowToTask_(row) {
+  var taskId = row['Task ID'] || '';
   return normalizeTaskRecord_({
-    id: row['Task ID'] || '',
+    id: taskId,
+    baseTaskId: extractTaskBaseId_(taskId),
     siteId: row['Site ID'] || '',
     engineer: row.Engineer || '',
     siteEngineerName: row['Site Engineer Name'] || '',
@@ -505,6 +510,7 @@ function mergeTaskRecords_(baseTask, patchTask) {
   var patch = normalizeTaskRecord_(patchTask || {});
   return normalizeTaskRecord_({
     id: patch.id || base.id || '',
+    baseTaskId: patch.baseTaskId || base.baseTaskId || extractTaskBaseId_(patch.id || base.id || ''),
     draftId: patch.draftId || base.draftId || '',
     client: patch.client || base.client || '',
     engineer: patch.engineer || base.engineer || '',
@@ -532,8 +538,10 @@ function mergeTaskRecords_(baseTask, patchTask) {
 }
 
 function normalizeTaskRecord_(task) {
+  var taskId = task.id || '';
   return {
-    id: task.id || '',
+    id: taskId,
+    baseTaskId: task.baseTaskId || extractTaskBaseId_(taskId),
     draftId: task.draftId || '',
     client: task.client || '',
     engineer: task.engineer || '',
@@ -558,6 +566,10 @@ function normalizeTaskRecord_(task) {
     createdAt: task.createdAt || '',
     updatedAt: task.updatedAt || ''
   };
+}
+
+function extractTaskBaseId_(taskId) {
+  return String(taskId || '').trim().replace(/^(draft|task|wip|complete)-/i, '');
 }
 
 function pickLatestArray_(preferred, fallback) {

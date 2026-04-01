@@ -134,6 +134,25 @@
     return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   }
 
+  function extractTaskBaseId(taskId) {
+    const value = String(taskId || "").trim();
+    if (!value) return "";
+    return value.replace(/^(draft|task|wip|complete)-/i, "");
+  }
+
+  function toLifecycleTaskId(taskId, statusOrStage) {
+    const baseId = extractTaskBaseId(taskId);
+    const rawStage = String(statusOrStage || "").trim().toLowerCase();
+    const prefix = rawStage === "completed" || rawStage === "complete"
+      ? "complete"
+      : rawStage === "wip"
+        ? "wip"
+        : rawStage === "pending" || rawStage === "task"
+          ? "task"
+          : "draft";
+    return baseId ? `${prefix}-${baseId}` : "";
+  }
+
   function formatDate(value) {
     if (!value) return "-";
     const date = new Date(value);
@@ -499,6 +518,8 @@
     writeState,
     clearLocalCache,
     uid,
+    extractTaskBaseId,
+    toLifecycleTaskId,
     formatDate,
     statusClass,
     setOptions,

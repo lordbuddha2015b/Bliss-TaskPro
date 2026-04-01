@@ -300,8 +300,12 @@
   function updateTask(taskId, updater, action) {
     const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
     if (!task) return null;
+    const previousTaskId = task.id;
     updater(task);
     task.updatedAt = new Date().toISOString();
+    if (task.id && task.id !== previousTaskId) {
+      activeTaskId = task.id;
+    }
     saveState(action, task);
     renderSiteList();
     return task;
@@ -335,6 +339,8 @@
     updateTask(taskId, (task) => {
       task.siteEngineerName = siteEngineerName;
       task.status = "WIP";
+      task.id = app.toLifecycleTaskId(task.id || task.baseTaskId || task.draftId, "WIP");
+      task.baseTaskId = app.extractTaskBaseId(task.id);
     }, "markWip");
   }
 
@@ -350,6 +356,8 @@
     updateTask(taskId, (current) => {
       current.siteEngineerName = siteEngineerName;
       current.status = "Completed";
+      current.id = app.toLifecycleTaskId(current.id || current.baseTaskId || current.draftId, "Completed");
+      current.baseTaskId = app.extractTaskBaseId(current.id);
     }, "markCompleted");
   }
 
