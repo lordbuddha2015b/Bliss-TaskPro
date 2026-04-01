@@ -92,11 +92,13 @@
   function renderSiteList() {
     const tasks = getEngineerTasks();
     const host = document.getElementById("engineer-site-list");
+    const detailHost = document.getElementById("engineer-task-detail");
     renderStats(tasks);
 
     if (!tasks.length) {
       host.innerHTML = app.emptyMarkup("No tasks assigned.");
-      document.getElementById("engineer-task-detail").innerHTML = app.emptyMarkup("Click a Site ID to fetch task details.");
+      activeTaskId = "";
+      detailHost.innerHTML = app.emptyMarkup("Click a Site ID to fetch task details.");
       return;
     }
 
@@ -119,8 +121,14 @@
       });
     });
 
-    if (!activeTaskId || !tasks.some((task) => task.id === activeTaskId)) {
-      activeTaskId = tasks[0].id;
+    if (!activeTaskId) {
+      detailHost.innerHTML = app.emptyMarkup("Click a Site ID to open task details.");
+      return;
+    }
+    if (!tasks.some((task) => task.id === activeTaskId)) {
+      activeTaskId = "";
+      detailHost.innerHTML = app.emptyMarkup("Click a Site ID to open task details.");
+      return;
     }
     renderTaskDetail(activeTaskId);
   }
@@ -230,8 +238,7 @@
         <section class="update-box">
           <h5>Site Photos</h5>
           <div class="doc-config-row">
-            <label><span>Upload Photos</span><input id="photoUpload" type="file" accept="image/*" multiple ${!canEdit || isCompleted ? "disabled" : ""}></label>
-            <label><span>Camera</span><input id="cameraUpload" type="file" accept="image/*" capture="environment" ${!canEdit || isCompleted ? "disabled" : ""}></label>
+            <label><span>Select Photos</span><input id="photoUpload" type="file" accept="image/*" multiple ${!canEdit || isCompleted ? "disabled" : ""}></label>
           </div>
           <div class="action-row">
             ${canEdit && !isCompleted ? '<button id="add-photos" class="secondary-button" type="button">Save Photos</button>' : ''}
@@ -412,11 +419,9 @@
   }
 
   async function addPhotos(taskId) {
-    const galleryFiles = Array.from(document.getElementById("photoUpload").files || []);
-    const cameraFiles = Array.from(document.getElementById("cameraUpload").files || []);
-    const files = [...galleryFiles, ...cameraFiles];
+    const files = Array.from(document.getElementById("photoUpload").files || []);
     if (!files.length) {
-      window.alert("Please choose photo files or camera photo.");
+      window.alert("Please choose photo files.");
       return;
     }
     const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);

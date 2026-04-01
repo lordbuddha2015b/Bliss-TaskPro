@@ -4,6 +4,7 @@ const CONFIG = {
   ENTRY_SHEET_ID: '13FpNMiOSQqVDTP_S-bmoNiGC2zSM-D_2_r1f5TfjD9I',
   DOCUMENT_FOLDER_ID: '1LRqfC3LAmN8s7kAKXjKhTYawhW2pcYBb',
   PHOTO_FOLDER_ID: '1YK4tt9njxSTnZeOnd4sw4qeBsA9g5Eri',
+  MEASUREMENT_FOLDER_ID: '1k65ph5AwZXXa_O2m-suK6Fu0E71vRL5V',
   APP_URL: 'PASTE_DEPLOYED_APPS_SCRIPT_WEB_APP_URL_HERE',
   ALLOWED_ORIGIN: '*'
 };
@@ -48,7 +49,8 @@ function doGet(e) {
     appUrl: CONFIG.APP_URL,
     sheetId: CONFIG.ENTRY_SHEET_ID,
     documentFolderId: CONFIG.DOCUMENT_FOLDER_ID,
-    photoFolderId: CONFIG.PHOTO_FOLDER_ID
+    photoFolderId: CONFIG.PHOTO_FOLDER_ID,
+    measurementFolderId: CONFIG.MEASUREMENT_FOLDER_ID
   });
 }
 
@@ -129,7 +131,7 @@ function saveFilesToDrive_(task, settings) {
   const mapping = {
     documents: getDocumentFolder_(settings),
     photos: getPhotoFolder_(settings),
-    measurementImages: getPhotoFolder_(settings)
+    measurementImages: getMeasurementFolder_(settings)
   };
 
   Object.keys(mapping).forEach(function(groupName) {
@@ -227,6 +229,14 @@ function getPhotoFolder_(settings) {
     CONFIG.PHOTO_FOLDER_ID,
     settings.googlePhotoFolderId,
     'Please update photo folder ID in code.gs'
+  );
+}
+
+function getMeasurementFolder_(settings) {
+  return getDriveFolderWithFallback_(
+    CONFIG.MEASUREMENT_FOLDER_ID,
+    settings.googleMeasurementFolderId,
+    'Please update measurement folder ID in code.gs'
   );
 }
 

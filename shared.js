@@ -18,6 +18,7 @@
         googleSheetId: "",
         googleDocumentFolderId: "",
         googlePhotoFolderId: "",
+        googleMeasurementFolderId: "",
         autoSyncEnabled: false
       },
       engineer: {
@@ -25,6 +26,7 @@
         googleSheetId: "",
         googleDocumentFolderId: "",
         googlePhotoFolderId: "",
+        googleMeasurementFolderId: "",
         autoSyncEnabled: false
       }
     },
@@ -268,6 +270,7 @@
       url.searchParams.set("sheetId", settings.googleSheetId || "");
       url.searchParams.set("documentFolderId", settings.googleDocumentFolderId || "");
       url.searchParams.set("photoFolderId", settings.googlePhotoFolderId || "");
+      url.searchParams.set("measurementFolderId", settings.googleMeasurementFolderId || "");
       url.searchParams.set("source", session?.role || "");
       url.searchParams.set("userId", session?.userId || "");
       url.searchParams.set("sessionToken", session?.sessionToken || "");
@@ -291,6 +294,7 @@
       url.searchParams.set("sheetId", settings.googleSheetId || "");
       url.searchParams.set("documentFolderId", settings.googleDocumentFolderId || "");
       url.searchParams.set("photoFolderId", settings.googlePhotoFolderId || "");
+      url.searchParams.set("measurementFolderId", settings.googleMeasurementFolderId || "");
       url.searchParams.set("source", session?.role || "");
       url.searchParams.set("userId", session?.userId || "");
       url.searchParams.set("sessionToken", session?.sessionToken || "");
@@ -349,7 +353,8 @@
         googleScriptUrl: sanitizeGoogleValue(data.appUrl),
         googleSheetId: sanitizeGoogleValue(data.sheetId),
         googleDocumentFolderId: sanitizeGoogleValue(data.documentFolderId),
-        googlePhotoFolderId: sanitizeGoogleValue(data.photoFolderId)
+        googlePhotoFolderId: sanitizeGoogleValue(data.photoFolderId),
+        googleMeasurementFolderId: sanitizeGoogleValue(data.measurementFolderId)
       };
     } catch (error) {
       return null;
@@ -369,6 +374,7 @@
       googleSheetId: sanitizeGoogleValue(nextSettings?.googleSheetId) || currentSettings?.googleSheetId || "",
       googleDocumentFolderId: sanitizeGoogleValue(nextSettings?.googleDocumentFolderId) || currentSettings?.googleDocumentFolderId || "",
       googlePhotoFolderId: sanitizeGoogleValue(nextSettings?.googlePhotoFolderId) || currentSettings?.googlePhotoFolderId || "",
+      googleMeasurementFolderId: sanitizeGoogleValue(nextSettings?.googleMeasurementFolderId) || currentSettings?.googleMeasurementFolderId || "",
       autoSyncEnabled: typeof nextSettings?.autoSyncEnabled === "boolean"
         ? nextSettings.autoSyncEnabled
         : currentSettings?.autoSyncEnabled ?? false
@@ -416,6 +422,7 @@
       url.searchParams.set("sheetId", settings.googleSheetId || "");
       url.searchParams.set("documentFolderId", settings.googleDocumentFolderId || "");
       url.searchParams.set("photoFolderId", settings.googlePhotoFolderId || "");
+      url.searchParams.set("measurementFolderId", settings.googleMeasurementFolderId || "");
       url.searchParams.set("role", session.role || "");
       url.searchParams.set("userId", session.userId || "");
       url.searchParams.set("sessionToken", session.sessionToken || "");
