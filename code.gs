@@ -293,8 +293,9 @@ function ensureHeadersAndStyle_(sheet, headers, headerColor, bandColor) {
   const headerRange = sheet.getRange(1, 1, 1, headers.length);
   headerRange.setBackground(headerColor).setFontColor('#ffffff').setFontWeight('bold');
   sheet.setFrozenRows(1);
-  if (sheet.getMaxRows() > 1) {
-    sheet.getRange(2, 1, Math.max(sheet.getMaxRows() - 1, 1), headers.length).setBackground(bandColor);
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, headers.length).setBackground(bandColor);
   }
   for (var i = 1; i <= headers.length; i++) {
     sheet.setColumnWidth(i, 170);
