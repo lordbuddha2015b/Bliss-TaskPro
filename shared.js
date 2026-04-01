@@ -350,7 +350,6 @@
       const data = await response.json();
       if (!data?.ok) return null;
       return {
-        googleScriptUrl: sanitizeGoogleValue(data.appUrl),
         googleSheetId: sanitizeGoogleValue(data.sheetId),
         googleDocumentFolderId: sanitizeGoogleValue(data.documentFolderId),
         googlePhotoFolderId: sanitizeGoogleValue(data.photoFolderId),
