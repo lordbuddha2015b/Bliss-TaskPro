@@ -60,7 +60,17 @@
   function applyRemoteState(remoteState) {
     if (!remoteState) return;
     state.options = { ...state.options, ...(remoteState.options || {}) };
-    state.tasks = Array.isArray(remoteState.tasks) ? remoteState.tasks : state.tasks;
+    if (Array.isArray(remoteState.tasks)) {
+      if (currentOpenTaskId) {
+        const localOpenTask = state.tasks.find((task) => task.id === currentOpenTaskId);
+        state.tasks = remoteState.tasks.map((task) => {
+          if (task.id !== currentOpenTaskId || !localOpenTask) return task;
+          return { ...localOpenTask };
+        });
+      } else {
+        state.tasks = remoteState.tasks;
+      }
+    }
     app.writeState(state);
     refreshAll();
     if (currentOpenTaskId) openTaskDetailModal(currentOpenTaskId);
@@ -299,6 +309,7 @@
     return {
       selectedDocuments: task.documents.filter((item) => item.answer === "Yes" && document.querySelector(`[data-doc-id="${item.id}"]`)?.checked).map((item) => item.id),
       selectedPhotos: task.photos.filter((item) => document.querySelector(`[data-photo-id="${item.id}"]`)?.checked).map((item) => item.id),
+      selectedMeasurementImages: task.measurementImages.filter((item) => document.querySelector(`[data-measurement-id="${item.id}"]`)?.checked).map((item) => item.id),
       includeMeasurement: document.getElementById("includeMeasurement")?.checked ?? true,
       includeMeasurementImages: document.getElementById("includeMeasurementImages")?.checked ?? true,
       includeInstructions: document.getElementById("includeInstructions")?.checked ?? true,
@@ -328,7 +339,8 @@
     }
   }
 
-  async function exportTaskPdf(task, share, remote = null) {
+  async function exportTaskPdf(task, share, remote = null, options = {}) {
+    const { download = true, saveDriveCopy = true } = options;
     const jsPDF = window.jspdf?.jsPDF;
     if (!jsPDF) return;
     const pdf = new jsPDF();
@@ -338,7 +350,8 @@
     const remotePhotos = remote?.photos || [];
     const exportDocuments = mergeExportItems(selectedDocs, remoteDocuments);
     const exportPhotos = mergeExportItems(selectedPhotos, remotePhotos);
-    const exportMeasurementImages = mergeExportItems(task.measurementImages || [], remote?.measurementImages || []);
+    const selectedMeasurementImages = (task.measurementImages || []).filter((item) => share.selectedMeasurementImages.includes(item.id));
+    const exportMeasurementImages = mergeExportItems(selectedMeasurementImages, remote?.measurementImages || []);
     let y = 18;
 
     const pageWidth = pdf.internal.pageSize.getWidth();
@@ -481,7 +494,7 @@
     addLinksBlock("Photos Google Drive Link", exportPhotos);
     const pdfDataUri = pdf.output("datauristring");
     const pdfBase64 = String(pdfDataUri).split(",")[1] || "";
-    if (pdfBase64 && masterSession) {
+    if (saveDriveCopy && pdfBase64 && masterSession) {
       app.showSyncStatus("Saving PDF copy to Site ID Drive folder...", "working", true);
       const reportResult = await app.savePdfToDrive(state.settings.master, masterSession, {
         siteId: task.siteId,
@@ -495,7 +508,10 @@
         app.showSyncStatus(reportResult?.message || "PDF downloaded, but Drive save failed.", "error");
       }
     }
-    pdf.save(`${task.siteId}_summary.pdf`);
+    if (download) {
+      pdf.save(`${task.siteId}_summary.pdf`);
+    }
+    return { pdfBase64 };
   }
 
   function safeJsonParse(value) {
@@ -563,10 +579,19 @@
       photos: latestPhotos.length ? latestPhotos : task.photos,
       measurementImages: latestMeasurementImages.length ? latestMeasurementImages : task.measurementImages
     };
+    task.documents = taskView.documents;
+    task.photos = taskView.photos;
+    task.measurementImages = taskView.measurementImages;
+    task.measurementText = taskView.measurementText;
+    task.gps = taskView.gps;
+    task.siteEngineerName = taskView.siteEngineerName;
+    task.status = taskView.status;
+    task.rollbackReason = taskView.rollbackReason || task.rollbackReason;
 
     const share = task.sharePackage || {
       selectedDocuments: taskView.documents.filter((item) => item.answer === "Yes").map((item) => item.id),
       selectedPhotos: taskView.photos.map((item) => item.id),
+      selectedMeasurementImages: taskView.measurementImages.map((item) => item.id),
       includeMeasurement: true,
       includeMeasurementImages: true,
       includeInstructions: true,
@@ -636,6 +661,11 @@
 
         <div>
           <strong>Measurement Images</strong>
+          <div class="check-grid">
+            ${taskView.measurementImages.length
+              ? taskView.measurementImages.map((item, index) => `<label><input type="checkbox" data-measurement-id="${item.id}" ${share.selectedMeasurementImages?.includes(item.id) ? "checked" : ""}>Measurement ${index + 1}</label>`).join("")
+              : '<span class="fine-print">No measurement images.</span>'}
+          </div>
           <div class="photo-preview-grid">${(remoteMeasurementImages.length ? remoteMeasurementImages : taskView.measurementImages).map((item, index) => `
             <div class="preview-card">
               ${(item.thumbnailUrl || item.previewUrl) ? `<img class="photo-preview" src="${item.thumbnailUrl || item.previewUrl}" alt="${app.escapeHtml(item.name || item.storedName || `Measurement ${index + 1}`)}">` : `<span class="frozen-chip">${app.escapeHtml(item.name || item.storedName || `Measurement ${index + 1}`)}</span>`}
@@ -677,15 +707,41 @@
         ` : ""}
 
         <div class="action-row">
-          <button id="save-share-package" class="secondary-button" type="button">Save Selection</button>
+          <button id="save-share-package" class="secondary-button" type="button">Save</button>
           <button id="download-share-pdf" class="primary-button" type="button">Export PDF</button>
         </div>
       </div>
     `;
 
-    document.getElementById("save-share-package").addEventListener("click", () => {
+    document.getElementById("save-share-package").addEventListener("click", async () => {
       task.sharePackage = collectSharePackage(task.id);
       saveState("saveSharePackage", { taskId: task.id, sharePackage: task.sharePackage });
+      const pdfResult = await exportTaskPdf(taskView, task.sharePackage, {
+        ...remote,
+        documents: remoteDocuments,
+        photos: remotePhotos,
+        measurementImages: remoteMeasurementImages
+      }, {
+        download: false,
+        saveDriveCopy: false
+      });
+      const selectedFileIds = []
+        .concat(task.sharePackage.selectedDocuments || [])
+        .concat(task.sharePackage.selectedPhotos || [])
+        .concat(task.sharePackage.selectedMeasurementImages || []);
+      app.showSyncStatus("Saving selected files to Reports folder...", "working", true);
+      const result = await app.saveReportFiles(state.settings.master, masterSession, {
+        siteId: task.siteId,
+        fileName: `${task.siteId}_summary.pdf`,
+        mimeType: "application/pdf",
+        pdfBase64: pdfResult?.pdfBase64 || "",
+        selectedFileIds
+      });
+      if (result?.ok) {
+        app.showSyncStatus("Reports folder updated successfully.", "success");
+      } else {
+        app.showSyncStatus(result?.message || "Unable to save selected files in Reports folder.", "error");
+      }
       openTaskDetailModal(task.id);
     });
 
@@ -697,6 +753,9 @@
         documents: remoteDocuments,
         photos: remotePhotos,
         measurementImages: remoteMeasurementImages
+      }, {
+        download: true,
+        saveDriveCopy: true
       });
     });
 
@@ -838,13 +897,12 @@
   }
 
   function startCrossDeviceSync() {
-    clearInterval(syncTimer);
-    clearInterval(sessionTimer);
+    stopCrossDeviceSync();
     if (!state.settings.master.googleScriptUrl || !masterSession?.userId || !masterSession?.sessionToken) return;
+    if (state.settings.master.autoSyncEnabled === false) return;
     sessionTimer = setInterval(() => {
       validateActiveSession({ silent: true });
     }, 15000);
-    if (state.settings.master.autoSyncEnabled === false) return;
     syncTimer = setInterval(() => {
       syncFromGoogleState({ silent: true });
     }, 10000);
@@ -1126,11 +1184,14 @@
       autoSyncEnabled: masterAutoSyncInput.checked
     });
     app.writeState(state);
+    stopCrossDeviceSync();
     autofillMasterSettings().finally(() => {
       refreshAll();
       saveState("saveGoogleSetting", { ...state.settings.master });
-      syncFromGoogleState({ silent: false });
-      startCrossDeviceSync();
+      if (state.settings.master.autoSyncEnabled !== false) {
+        syncFromGoogleState({ silent: false });
+        startCrossDeviceSync();
+      }
       closeSettings();
     });
   });
@@ -1194,6 +1255,7 @@
   });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden || !masterSession) return;
+    if (state.settings.master.autoSyncEnabled === false) return;
     validateActiveSession({ silent: true }).then((isValid) => {
       if (isValid) syncFromGoogleState({ silent: true });
     });

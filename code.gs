@@ -42,6 +42,12 @@ function doPost(e) {
     if (action === 'savePdfToDrive') {
       return jsonOutput(savePdfToDrive_(payload.payload || {}));
     }
+    if (action === 'deleteDriveFile') {
+      return jsonOutput(deleteDriveFile_(payload.payload || {}));
+    }
+    if (action === 'saveReportFiles') {
+      return jsonOutput(saveReportFiles_(payload.payload || {}));
+    }
 
     const task = normalizeTaskRecord_(payload.payload || {});
 
@@ -640,6 +646,73 @@ function savePdfToDrive_(payload) {
   return {
     ok: true,
     file: makeFileDescriptor_(file, 'report'),
+    siteWorkspace: siteWorkspaceToObject_(siteWorkspace)
+  };
+}
+
+function deleteDriveFile_(payload) {
+  const siteId = String(payload.siteId || '').trim();
+  const fileId = String(payload.fileId || '').trim();
+  if (!siteId) return { ok: false, message: 'Site ID is required to delete file.' };
+  if (!fileId) return { ok: false, message: 'File ID is required to delete file.' };
+
+  const siteWorkspace = ensureSiteWorkspace_(siteId);
+  const task = readSiteTaskSheet_(siteWorkspace);
+  const nextTask = normalizeTaskRecord_({
+    ...task,
+    documents: (task.documents || []).filter(function(item) { return String(item.id || '') !== fileId; }),
+    photos: (task.photos || []).filter(function(item) { return String(item.id || '') !== fileId; }),
+    measurementImages: (task.measurementImages || []).filter(function(item) { return String(item.id || '') !== fileId; }),
+    updatedAt: new Date().toISOString()
+  });
+
+  try {
+    DriveApp.getFileById(fileId).setTrashed(true);
+  } catch (error) {}
+
+  writeSiteTaskSheet_(siteWorkspace, nextTask);
+  return {
+    ok: true,
+    task: nextTask,
+    siteWorkspace: siteWorkspaceToObject_(siteWorkspace)
+  };
+}
+
+function saveReportFiles_(payload) {
+  const siteId = String(payload.siteId || '').trim();
+  const pdfBase64 = String(payload.pdfBase64 || '').trim();
+  const selectedFileIds = Array.isArray(payload.selectedFileIds) ? payload.selectedFileIds.map(function(id) { return String(id || '').trim(); }).filter(Boolean) : [];
+  const fileName = String(payload.fileName || `${siteId}_summary.pdf`).trim();
+  if (!siteId) return { ok: false, message: 'Site ID is required to save report files.' };
+  if (!pdfBase64) return { ok: false, message: 'PDF content is required.' };
+
+  const siteWorkspace = ensureSiteWorkspace_(siteId);
+  const reportsFolder = siteWorkspace.reportsFolder;
+
+  selectedFileIds.forEach(function(fileId) {
+    try {
+      const file = DriveApp.getFileById(fileId);
+      const existingCopy = findFileByName_(reportsFolder, file.getName());
+      if (existingCopy) existingCopy.setTrashed(true);
+      const copied = file.makeCopy(file.getName(), reportsFolder);
+      shareDriveItem_(copied);
+    } catch (error) {}
+  });
+
+  const existingPdf = findFileByName_(reportsFolder, fileName);
+  if (existingPdf) existingPdf.setTrashed(true);
+  const blob = Utilities.newBlob(
+    Utilities.base64Decode(pdfBase64),
+    String(payload.mimeType || 'application/pdf'),
+    fileName
+  );
+  const pdfFile = reportsFolder.createFile(blob);
+  shareDriveItem_(pdfFile);
+
+  return {
+    ok: true,
+    file: makeFileDescriptor_(pdfFile, 'report'),
+    copiedFileIds: selectedFileIds,
     siteWorkspace: siteWorkspaceToObject_(siteWorkspace)
   };
 }

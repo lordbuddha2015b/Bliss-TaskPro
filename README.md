@@ -15,23 +15,30 @@ Bliss TaskPro includes a Master web app and an Engineer web app for draft creati
 - Per-SiteID Google Sheet storage for Master Entry and Engineer Entry
 - Upload support for documents, site photos, measurement text, measurement images, and GPS
 - PDF export from Master review
-- Backward compatibility layer for older centralized task records
+- Auto Sync toggle for Master and Engineer with manual sync fallback
+- Sequential file upload queue with retry and progress feedback
 
 ## Workflow
 
 ```text
 Draft
-↓
+|
+v
 Task Assigned (Site ID)
-↓
+|
+v
 Pending
-↓
+|
+v
 WIP
-↓
+|
+v
 Completed
-↓
+|
+v
 Master Review
-↓
+|
+v
 PDF Export
 ```
 
@@ -55,11 +62,11 @@ PDF Export
 
 ```text
 Root Folder
-└── SiteID Folder
-    ├── Documents
-    ├── Site Photos
-    ├── Measurement Photos
-    └── SiteID_DataSheet
+\-- SiteID Folder
+    +-- Documents
+    +-- Site Photos
+    +-- Measurement Photos
+    \-- SiteID_DataSheet
 ```
 
 Root Google Drive folder ID:
@@ -100,6 +107,12 @@ Each Site ID gets its own Google Sheet named `SiteID_DataSheet`.
 
 - UI theme, login system, manual Site ID entry, and status names remain unchanged.
 - Sync now preserves local Master drafts until they are converted into tasks.
+- Auto Sync now only runs background timers when the saved toggle is ON.
+- With Auto Sync OFF, refresh, manual sync, and task-save actions still update data, but no background interval runs.
 - Engineer auto sync now preserves the active WIP form while refreshing task list and status changes.
+- Active Engineer upload sessions lock action buttons, show progress text, and upload files one-by-one with automatic retries.
 - Master PDF export now also saves a copy into the Site ID `Reports` folder in Drive.
 - Rollback reason input now appears only after a rollback option is selected in the completed task modal.
+- Engineer task details now fetch and display previously uploaded Drive files for documents, photos, and measurement images.
+- Master task details now allow selecting individual documents, photos, and measurement images before saving a report.
+- Master `Save` now stores the PDF and the selected file copies inside the Site ID `Reports` folder.

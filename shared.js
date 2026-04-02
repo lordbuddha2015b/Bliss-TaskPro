@@ -252,6 +252,12 @@
     }
   }
 
+  function delay(ms) {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
+  }
+
   async function savePdfToDrive(settings, session, payload) {
     const endpoint = settings?.googleScriptUrl;
     if (!endpoint) return { ok: false, message: "Apps Script URL is required in settings." };
@@ -270,6 +276,48 @@
       return await response.json();
     } catch (error) {
       return { ok: false, message: error.message || "Unable to save PDF to Drive." };
+    }
+  }
+
+  async function deleteDriveFile(settings, session, payload) {
+    const endpoint = settings?.googleScriptUrl;
+    if (!endpoint) return { ok: false, message: "Apps Script URL is required in settings." };
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "deleteDriveFile",
+          source: session?.role || "engineer",
+          userId: session?.userId || "",
+          sessionToken: session?.sessionToken || "",
+          payload
+        })
+      });
+      return await response.json();
+    } catch (error) {
+      return { ok: false, message: error.message || "Unable to delete Drive file." };
+    }
+  }
+
+  async function saveReportFiles(settings, session, payload) {
+    const endpoint = settings?.googleScriptUrl;
+    if (!endpoint) return { ok: false, message: "Apps Script URL is required in settings." };
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "saveReportFiles",
+          source: session?.role || "master",
+          userId: session?.userId || "",
+          sessionToken: session?.sessionToken || "",
+          payload
+        })
+      });
+      return await response.json();
+    } catch (error) {
+      return { ok: false, message: error.message || "Unable to save report files." };
     }
   }
 
@@ -527,7 +575,10 @@
     escapeHtml,
     loadDistricts,
     postGoogleSync,
+    delay,
     savePdfToDrive,
+    deleteDriveFile,
+    saveReportFiles,
     fetchGoogleTask,
     fetchGoogleState,
     reverseGeocodeDistrict,

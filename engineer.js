@@ -11,6 +11,8 @@
   let liveSaveTimer = null;
   let syncTimer = null;
   let sessionTimer = null;
+  let remoteTaskCache = {};
+  let uploadStateByTaskId = {};
 
   const loginScreen = document.getElementById("engineer-login-screen");
   const appShell = document.getElementById("engineer-app-shell");
@@ -55,16 +57,7 @@
         const localActiveTask = state.tasks.find((task) => task.id === activeTaskId);
         state.tasks = remoteState.tasks.map((task) => {
           if (task.id !== activeTaskId || !localActiveTask) return task;
-          return {
-            ...task,
-            siteEngineerName: localActiveTask.siteEngineerName,
-            measurementText: localActiveTask.measurementText,
-            documents: localActiveTask.documents,
-            photos: localActiveTask.photos,
-            measurementImages: localActiveTask.measurementImages,
-            gps: localActiveTask.gps,
-            updatedAt: localActiveTask.updatedAt
-          };
+          return { ...localActiveTask };
         });
       } else {
         state.tasks = remoteState.tasks;
@@ -73,6 +66,52 @@
     app.writeState(state);
     renderSiteList();
     applyActiveFormState(activeFormSnapshot);
+  }
+
+  function mergeDriveFiles(localItems, remoteItems, extra = {}) {
+    const map = new Map();
+    (localItems || []).forEach((item) => {
+      const key = String(item.id || item.storedName || item.name || "");
+      if (!key) return;
+      map.set(key, { ...item, ...extra });
+    });
+    (remoteItems || []).forEach((item) => {
+      const key = String(item.id || item.storedName || item.name || "");
+      if (!key) return;
+      map.set(key, {
+        ...(map.get(key) || {}),
+        ...item,
+        storedName: item.storedName || item.name || map.get(key)?.storedName || "",
+        ...extra
+      });
+    });
+    return Array.from(map.values());
+  }
+
+  function mergeRemoteTaskAssets(task, remoteTask) {
+    if (!task || !remoteTask?.ok) return task;
+    const merged = {
+      ...task,
+      documents: mergeDriveFiles(task.documents, remoteTask.documents || []),
+      photos: mergeDriveFiles(task.photos, remoteTask.photos || []),
+      measurementImages: mergeDriveFiles(task.measurementImages, remoteTask.measurementImages || []),
+      measurementText: remoteTask.latestRow?.["Measurement Text"] || task.measurementText,
+      gps: remoteTask.latestRow?.["GPS Latitude"] || remoteTask.latestRow?.["GPS Longitude"]
+        ? {
+            latitude: remoteTask.latestRow["GPS Latitude"] || "",
+            longitude: remoteTask.latestRow["GPS Longitude"] || ""
+          }
+        : task.gps,
+      rollbackReason: remoteTask.latestRow?.["Rollback Reason"] || task.rollbackReason,
+      updatedAt: new Date().toISOString()
+    };
+    const taskIndex = state.tasks.findIndex((item) => item.id === task.id && item.engineer === currentEngineer);
+    if (taskIndex >= 0) {
+      state.tasks[taskIndex] = merged;
+      app.writeState(state);
+    }
+    remoteTaskCache[task.id] = remoteTask;
+    return merged;
   }
 
   function forceLogout(message) {
@@ -87,35 +126,6 @@
       window.alert(message);
     }
     showLogin();
-  }
-
-  function saveState(action, payload) {
-    app.writeState(state);
-    if (!engineerSession?.userId || !engineerSession?.sessionToken) return;
-    app.showSyncStatus("Saving data to Google Sheet and Drive...", "working", true);
-    app.postGoogleSync(state, {
-      app: "Bliss TaskPro",
-      source: "engineer",
-      userId: engineerUserId,
-      sessionToken: engineerSession?.sessionToken || "",
-      action,
-      payload,
-      state
-    }).then((result) => {
-      if (result?.sessionExpired) {
-        forceLogout("This Engineer login was used on another device. Please login again.");
-        return;
-      }
-      if (result?.error) {
-        app.showSyncStatus(result.error.message || "Sync failed. Data is still cached on this device.", "error");
-        return;
-      }
-      if (result?.skipped) {
-        app.showSyncStatus("Saved locally. Add Apps Script settings to enable cloud sync.", "idle");
-        return;
-      }
-      app.showSyncStatus("Saved to Google Sheet and Drive successfully.", "success");
-    });
   }
 
   function refreshState() {
@@ -136,6 +146,32 @@
         }
       });
     return Array.from(taskMap.values());
+  }
+
+  function getUploadState(taskId) {
+    return uploadStateByTaskId[taskId] || { busy: false, section: "", message: "", progressText: "" };
+  }
+
+  function setUploadState(taskId, nextState) {
+    uploadStateByTaskId = {
+      ...uploadStateByTaskId,
+      [taskId]: {
+        ...getUploadState(taskId),
+        ...nextState
+      }
+    };
+    if (activeTaskId === taskId) renderTaskDetail(taskId);
+  }
+
+  function clearUploadState(taskId) {
+    if (!uploadStateByTaskId[taskId]) return;
+    uploadStateByTaskId = { ...uploadStateByTaskId };
+    delete uploadStateByTaskId[taskId];
+    if (activeTaskId === taskId) renderTaskDetail(taskId);
+  }
+
+  function isUploadBusy(taskId = activeTaskId) {
+    return !!getUploadState(taskId).busy;
   }
 
   function renderStats(tasks) {
@@ -188,7 +224,7 @@
     renderTaskDetail(activeTaskId);
   }
 
-  function fileListMarkup(items, removeAction, editable) {
+  function fileListMarkup(items, removeAction, editable, disabled = false) {
     if (!items.length) return "<li>No files added.</li>";
     return items.map((item, index) => `
       <li class="file-card-item">
@@ -197,19 +233,19 @@
             ? `<img class="photo-preview" src="${item.previewUrl || item.thumbnailUrl}" alt="${app.escapeHtml(item.storedName || item.name || `File ${index + 1}`)}">`
             : `<span class="frozen-chip">${app.escapeHtml(item.docType || "File")}</span>`}
           <span class="preview-name">${app.escapeHtml(item.storedName || item.name || `File ${index + 1}`)}</span>
-          ${editable ? `<button class="mini-button" type="button" data-remove="${removeAction}" data-file-id="${item.id}">Remove</button>` : ""}
+          ${editable ? `<button class="mini-button" type="button" data-remove="${removeAction}" data-file-id="${item.id}" ${disabled ? "disabled" : ""}>Remove</button>` : ""}
         </div>
       </li>
     `).join("");
   }
 
-  function imagePreviewMarkup(items, removeAction, editable) {
+  function imagePreviewMarkup(items, removeAction, editable, disabled = false) {
     if (!items.length) return '<span class="fine-print">No photos added.</span>';
     return items.map((item) => `
       <div class="preview-card">
         ${item.previewUrl || item.thumbnailUrl ? `<img class="photo-preview" src="${item.previewUrl || item.thumbnailUrl}" alt="${app.escapeHtml(item.storedName)}">` : `<span class="frozen-chip">${app.escapeHtml(item.storedName)}</span>`}
         <span class="preview-name">${app.escapeHtml(item.storedName || item.name || "Photo")}</span>
-        ${editable ? `<button class="mini-button" type="button" data-remove="${removeAction}" data-file-id="${item.id}">Remove</button>` : ""}
+        ${editable ? `<button class="mini-button" type="button" data-remove="${removeAction}" data-file-id="${item.id}" ${disabled ? "disabled" : ""}>Remove</button>` : ""}
       </div>
     `).join("");
   }
@@ -221,17 +257,35 @@
       || /\.(png|jpe?g|gif|bmp|webp|svg)$/.test(fileName);
   }
 
-  function renderTaskDetail(taskId, documentAnswerOverride) {
-    const task = getEngineerTasks().find((item) => item.id === taskId);
+  async function renderTaskDetail(taskId, documentAnswerOverride) {
+    let task = getEngineerTasks().find((item) => item.id === taskId);
     const host = document.getElementById("engineer-task-detail");
     if (!task) {
       host.innerHTML = app.emptyMarkup("Task not found.");
       return;
     }
+    const uploadState = getUploadState(task.id);
+    if (!uploadState.busy) {
+      host.innerHTML = app.emptyMarkup("Loading Site ID details...");
+      const remoteTask = await app.fetchGoogleTask(state.settings.engineer, task.siteId, engineerSession);
+      if (remoteTask?.sessionExpired) {
+        forceLogout("This Engineer login was used on another device. Please login again.");
+        return;
+      }
+      task = mergeRemoteTaskAssets(task, remoteTask);
+    }
 
     const isCompleted = task.status === "Completed";
     const canEdit = task.status === "WIP";
     const canStartWip = task.status === "Pending";
+    const isUploading = !!uploadState.busy;
+    const disableActions = isUploading || isCompleted;
+    const sectionProgress = (section) => uploadState.section === section && uploadState.progressText
+      ? `<p class="fine-print">${app.escapeHtml(uploadState.progressText)}</p>`
+      : "";
+    const sectionMessage = (section) => uploadState.section === section && uploadState.message
+      ? `<p class="fine-print">${app.escapeHtml(uploadState.message)}</p>`
+      : "";
     const docHasYes = task.documents.some((item) => item.answer === "Yes");
     const documentAnswer = documentAnswerOverride || (docHasYes ? "Yes" : "No");
     const showDocumentFields = documentAnswer === "Yes" && canEdit && !isCompleted;
@@ -253,13 +307,14 @@
         </div>
 
         <div class="action-row action-row-top">
-          ${canStartWip ? '<button id="mark-wip" class="secondary-button" type="button">WIP</button>' : ''}
+          ${canStartWip ? `<button id="mark-wip" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>WIP</button>` : ''}
           <span class="status-pill ${app.statusClass(task.status)}">${task.status}</span>
         </div>
+        ${isUploading ? `<div class="update-box"><p class="fine-print">${app.escapeHtml(uploadState.message || "Uploading files...")}</p><p class="fine-print">${app.escapeHtml(uploadState.progressText || "Saving to Google Drive...")}</p></div>` : ""}
 
         <section class="update-box">
           <h5>Site Engineer Name</h5>
-          <label><span>Name</span><input id="siteEngineerName" type="text" value="${app.escapeHtml(task.siteEngineerName || "")}" ${isCompleted ? "disabled" : ""}></label>
+          <label><span>Name</span><input id="siteEngineerName" type="text" value="${app.escapeHtml(task.siteEngineerName || "")}" ${disableActions ? "disabled" : ""}></label>
           <p class="fine-print">${isCompleted ? "Completed task is frozen." : "Required before marking WIP."}</p>
         </section>
 
@@ -267,56 +322,62 @@
           <h5>Document Available</h5>
           <div class="form-grid">
             <label><span>Document Available</span>
-              <select id="documentAnswer" ${!canEdit || isCompleted ? "disabled" : ""}>
+              <select id="documentAnswer" ${!canEdit || disableActions ? "disabled" : ""}>
                 <option value="No" ${documentAnswer === "No" ? "selected" : ""}>No</option>
                 <option value="Yes" ${documentAnswer === "Yes" ? "selected" : ""}>Yes</option>
               </select>
             </label>
             ${showDocumentFields ? `
               <label><span>Document Type</span>
-                <select id="documentType">
+                <select id="documentType" ${isUploading ? "disabled" : ""}>
                   <option value="DN">DN</option>
                   <option value="ESCOMDocuments">ESCOMDocuments</option>
                   <option value="Receipt">Receipt</option>
                   <option value="Electrical Inspectrate">Electrical Inspectrate</option>
                 </select>
               </label>
-              <label class="full-span" id="document-upload-wrap"><span>Upload Document</span><input id="documentUpload" type="file"></label>
+              <label class="full-span" id="document-upload-wrap"><span>Upload Document</span><input id="documentUpload" type="file" ${isUploading ? "disabled" : ""}></label>
             ` : ""}
           </div>
           <div class="action-row">
-            ${showDocumentFields ? '<button id="add-document" class="secondary-button" type="button">Add Document</button>' : ''}
+            ${showDocumentFields ? `<button id="add-document" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>Add Document</button>` : ''}
           </div>
-          <ul class="file-list">${fileListMarkup(task.documents, "document", canEdit && !isCompleted)}</ul>
+          ${sectionMessage("document")}
+          ${sectionProgress("document")}
+          <ul class="file-list">${fileListMarkup(task.documents, "document", canEdit && !isCompleted, isUploading)}</ul>
         </section>
 
         <section class="update-box">
           <h5>Site Photos</h5>
           <div class="doc-config-row">
-            <label><span>Select Photos</span><input id="photoUpload" type="file" accept="image/*" multiple ${!canEdit || isCompleted ? "disabled" : ""}></label>
+            <label><span>Select Photos</span><input id="photoUpload" type="file" accept="image/*" multiple ${!canEdit || disableActions ? "disabled" : ""}></label>
           </div>
           <div class="action-row">
-            ${canEdit && !isCompleted ? '<button id="add-photos" class="secondary-button" type="button">Save Photos</button>' : ''}
+            ${canEdit && !isCompleted ? `<button id="add-photos" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>Save Photos</button>` : ''}
           </div>
-          <div class="photo-preview-grid">${imagePreviewMarkup(task.photos, "photo", canEdit && !isCompleted)}</div>
+          ${sectionMessage("photo")}
+          ${sectionProgress("photo")}
+          <div class="photo-preview-grid">${imagePreviewMarkup(task.photos, "photo", canEdit && !isCompleted, isUploading)}</div>
         </section>
 
         <section class="update-box">
           <h5>Measurement</h5>
           <div class="form-grid">
-            <label class="full-span"><span>Measurement Text</span><textarea id="measurementText" ${isCompleted ? "disabled" : ""}>${app.escapeHtml(task.measurementText || "")}</textarea></label>
-            <label><span>Measurement Image</span><input id="measurementUpload" type="file" accept="image/*" multiple ${!canEdit || isCompleted ? "disabled" : ""}></label>
+            <label class="full-span"><span>Measurement Text</span><textarea id="measurementText" ${disableActions ? "disabled" : ""}>${app.escapeHtml(task.measurementText || "")}</textarea></label>
+            <label><span>Measurement Image</span><input id="measurementUpload" type="file" accept="image/*" multiple ${!canEdit || disableActions ? "disabled" : ""}></label>
           </div>
           <div class="action-row">
-            ${canEdit && !isCompleted ? '<button id="save-measurement" class="secondary-button" type="button">Save Measurement</button>' : ''}
+            ${canEdit && !isCompleted ? `<button id="save-measurement" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>Save Measurement</button>` : ''}
           </div>
-          <ul class="file-list">${fileListMarkup(task.measurementImages, "measurement", canEdit && !isCompleted)}</ul>
+          ${sectionMessage("measurement")}
+          ${sectionProgress("measurement")}
+          <ul class="file-list">${fileListMarkup(task.measurementImages, "measurement", canEdit && !isCompleted, isUploading)}</ul>
         </section>
 
         <section class="update-box">
           <h5>Location Capture</h5>
           <div class="action-row">
-            ${canEdit && !isCompleted ? '<button id="capture-gps" class="secondary-button" type="button">Capture GPS Location</button><button id="pick-gps-map" class="secondary-button" type="button">Open Map And Select</button><button id="clear-gps" class="secondary-button" type="button">Clear Location</button>' : ''}
+            ${canEdit && !isCompleted ? `<button id="capture-gps" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>Capture GPS Location</button><button id="pick-gps-map" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>Open Map And Select</button><button id="clear-gps" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>Clear Location</button>` : ''}
           </div>
           <div class="form-grid">
             <label><span>Completion Latitude</span><input id="completionLatitude" type="number" step="any" readonly value="${task.gps?.latitude || ""}"></label>
@@ -326,7 +387,7 @@
         </section>
 
         <div class="action-row">
-          ${canEdit && !isCompleted ? '<button id="mark-completed" class="primary-button" type="button">Complete</button>' : ''}
+          ${canEdit && !isCompleted ? `<button id="mark-completed" class="primary-button" type="button" ${isUploading ? "disabled" : ""}>Complete</button>` : ''}
         </div>
       </div>
     `;
@@ -351,7 +412,43 @@
     document.getElementById("mark-wip")?.addEventListener("click", () => markWip(task.id));
   }
 
-  function updateTask(taskId, updater, action) {
+  async function saveState(action, payload, options = {}) {
+    const {
+      statusMessage = "Saving data to Google Sheet and Drive...",
+      successMessage = "Saved to Google Sheet and Drive successfully.",
+      skippedMessage = "Saved locally. Add Apps Script settings to enable cloud sync.",
+      showStatus = true
+    } = options;
+    app.writeState(state);
+    if (!engineerSession?.userId || !engineerSession?.sessionToken) return { skipped: true };
+    if (showStatus && statusMessage) app.showSyncStatus(statusMessage, "working", true);
+    const result = await app.postGoogleSync(state, {
+      app: "Bliss TaskPro",
+      source: "engineer",
+      userId: engineerUserId,
+      sessionToken: engineerSession?.sessionToken || "",
+      action,
+      payload,
+      state
+    });
+    if (result?.sessionExpired) {
+      forceLogout("This Engineer login was used on another device. Please login again.");
+      return result;
+    }
+    if (result?.error) {
+      if (showStatus) app.showSyncStatus(result.error.message || "Sync failed. Data is still cached on this device.", "error");
+      return result;
+    }
+    if (result?.skipped) {
+      if (showStatus) app.showSyncStatus(skippedMessage, "idle");
+      return result;
+    }
+    if (showStatus && successMessage) app.showSyncStatus(successMessage, "success");
+    return result;
+  }
+
+  async function updateTask(taskId, updater, action, options = {}) {
+    const { skipSave = false, skipRender = false, saveOptions = {} } = options;
     const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
     if (!task) return null;
     const previousTaskId = task.id;
@@ -360,8 +457,11 @@
     if (task.id && task.id !== previousTaskId) {
       activeTaskId = task.id;
     }
-    saveState(action, task);
-    renderSiteList();
+    app.writeState(state);
+    if (!skipSave) {
+      await saveState(action, task, saveOptions);
+    }
+    if (!skipRender) renderSiteList();
     return task;
   }
 
@@ -371,7 +471,7 @@
 
   function scheduleLiveTaskUpdate(taskId) {
     const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
-    if (!task || task.status !== "WIP") return;
+    if (!task || task.status !== "WIP" || isUploadBusy(taskId)) return;
     clearTimeout(liveSaveTimer);
     liveSaveTimer = setTimeout(() => {
       updateTask(taskId, (taskItem) => {
@@ -385,6 +485,7 @@
   }
 
   function markWip(taskId) {
+    if (isUploadBusy(taskId)) return;
     const siteEngineerName = collectSiteEngineerName();
     if (!siteEngineerName) {
       window.alert("Please fill Site Engineer Name before starting WIP.");
@@ -399,6 +500,7 @@
   }
 
   function markCompleted(taskId) {
+    if (isUploadBusy(taskId)) return;
     const siteEngineerName = collectSiteEngineerName();
     const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
     if (!task) return;
@@ -415,7 +517,110 @@
     }, "markCompleted");
   }
 
+  function syncActiveInputsToTask(taskId) {
+    const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
+    if (!task) return null;
+    const siteEngineerName = document.getElementById("siteEngineerName")?.value.trim();
+    const measurementText = document.getElementById("measurementText")?.value.trim();
+    const documentAnswer = document.getElementById("documentAnswer")?.value;
+    if (typeof siteEngineerName === "string") task.siteEngineerName = siteEngineerName;
+    if (typeof measurementText === "string") task.measurementText = measurementText;
+    if (typeof documentAnswer === "string" && documentAnswer === "No") {
+      task.documents = task.documents.filter((item) => item.answer !== "No");
+    }
+    app.writeState(state);
+    return task;
+  }
+
+  function replaceTaskCollection(task, collectionName, items, extraUpdater) {
+    task[collectionName] = items.slice();
+    if (typeof extraUpdater === "function") extraUpdater(task);
+  }
+
+  async function persistQueuedFile(taskId, action) {
+    const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
+    if (!task) return { ok: false, message: "Task not found." };
+    const result = await saveState(action, task, {
+      statusMessage: "Saving to Google Drive...",
+      successMessage: "",
+      showStatus: false
+    });
+    if (result?.error || result?.sessionExpired) return result;
+    return { ok: !result?.skipped, skipped: !!result?.skipped };
+  }
+
+  async function uploadItemsSequentially(taskId, section, items, applyFile) {
+    if (!items.length) return true;
+    const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
+    if (!task) return false;
+    setUploadState(taskId, {
+      busy: true,
+      section,
+      message: "Uploading files...",
+      progressText: `Uploading 0 of ${items.length} files`
+    });
+    for (let index = 0; index < items.length; index += 1) {
+      const total = items.length;
+      const currentCount = index + 1;
+      const originalTask = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
+      const originalDocuments = [...(originalTask?.documents || [])];
+      const originalPhotos = [...(originalTask?.photos || [])];
+      const originalMeasurements = [...(originalTask?.measurementImages || [])];
+      const originalMeasurementText = originalTask?.measurementText || "";
+      const originalSiteEngineerName = originalTask?.siteEngineerName || "";
+      setUploadState(taskId, {
+        busy: true,
+        section,
+        message: "Uploading files...",
+        progressText: `Uploading ${currentCount} of ${total} files`
+      });
+      let uploaded = false;
+      let failureMessage = "Upload failed. Please retry.";
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        syncActiveInputsToTask(taskId);
+        const activeTask = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
+        if (!activeTask) break;
+        applyFile(activeTask, items[index]);
+        app.writeState(state);
+        renderSiteList();
+        const result = await persistQueuedFile(taskId, section === "document" ? "addDocumentYes" : section === "photo" ? "addPhotos" : "saveMeasurement");
+        if (result?.ok) {
+          uploaded = true;
+          break;
+        }
+        failureMessage = result?.error?.message || failureMessage;
+        replaceTaskCollection(activeTask, "documents", originalDocuments);
+        replaceTaskCollection(activeTask, "photos", originalPhotos);
+        replaceTaskCollection(activeTask, "measurementImages", originalMeasurements, (taskItem) => {
+          taskItem.measurementText = originalMeasurementText;
+          taskItem.siteEngineerName = originalSiteEngineerName;
+        });
+        app.writeState(state);
+        renderSiteList();
+        if (attempt < 2) {
+          setUploadState(taskId, {
+            busy: true,
+            section,
+            message: "Upload failed. Retrying...",
+            progressText: `Uploading ${currentCount} of ${total} files`
+          });
+          await app.delay(2000);
+        }
+      }
+      if (!uploaded) {
+        clearUploadState(taskId);
+        app.showSyncStatus(failureMessage || "Upload failed. Please retry.", "error");
+        return false;
+      }
+    }
+    clearUploadState(taskId);
+    app.showSyncStatus("Saved to Google Sheet and Drive successfully.", "success");
+    renderSiteList();
+    return true;
+  }
+
   async function addDocument(taskId) {
+    if (isUploadBusy(taskId)) return;
     const answer = document.getElementById("documentAnswer").value;
     if (answer === "No") {
       updateTask(taskId, (task) => {
@@ -438,14 +643,18 @@
       return;
     }
     const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
-    const files = await app.enrichFilesWithContent(task.siteId, fileInput.files, { answer: "Yes", docType: type });
-    files.forEach((file) => {
-      file.storedName = `${type}_${task.siteId}_${file.originalName}`;
+    const rawFiles = Array.from(fileInput.files || []);
+    const enrichedFiles = [];
+    for (const rawFile of rawFiles) {
+      const [enriched] = await app.enrichFilesWithContent(task.siteId, [rawFile], { answer: "Yes", docType: type });
+      enriched.storedName = `${type}_${task.siteId}_${enriched.originalName}`;
+      enrichedFiles.push(enriched);
+    }
+    await uploadItemsSequentially(taskId, "document", enrichedFiles, (taskItem, file) => {
+      taskItem.documents = taskItem.documents.filter((item) => item.answer !== "No");
+      taskItem.documents = taskItem.documents.concat(file);
     });
-    updateTask(taskId, (taskItem) => {
-      taskItem.documents = taskItem.documents.filter((item) => !(item.answer === "No"));
-      taskItem.documents = taskItem.documents.concat(files);
-    }, "addDocumentYes");
+    fileInput.value = "";
   }
 
   function getCurrentCoords() {
@@ -466,6 +675,7 @@
   }
 
   async function addPhotos(taskId) {
+    if (isUploadBusy(taskId)) return;
     const files = Array.from(document.getElementById("photoUpload").files || []);
     if (!files.length) {
       window.alert("Please choose photo files.");
@@ -473,43 +683,79 @@
     }
     const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
     const coords = await getCurrentCoords();
-    const next = await app.enrichFilesWithContent(task.siteId, files, coords || {});
-    next.forEach((file) => {
-      file.storedName = coords
-        ? `${task.siteId}_${coords.latitude}_${coords.longitude}_${file.originalName}`
-        : `${task.siteId}_${file.originalName}`;
+    const enrichedFiles = [];
+    for (const rawFile of files) {
+      const [enriched] = await app.enrichFilesWithContent(task.siteId, [rawFile], coords || {});
+      enriched.storedName = coords
+        ? `${task.siteId}_${coords.latitude}_${coords.longitude}_${enriched.originalName}`
+        : `${task.siteId}_${enriched.originalName}`;
+      enrichedFiles.push(enriched);
+    }
+    await uploadItemsSequentially(taskId, "photo", enrichedFiles, (taskItem, file) => {
+      taskItem.photos = taskItem.photos.concat(file);
     });
-    updateTask(taskId, (taskItem) => {
-      taskItem.photos = taskItem.photos.concat(next);
-    }, "addPhotos");
+    document.getElementById("photoUpload").value = "";
   }
 
   async function saveMeasurement(taskId) {
+    if (isUploadBusy(taskId)) return;
     const measurementText = document.getElementById("measurementText").value.trim();
     const measurementFiles = document.getElementById("measurementUpload").files;
-    const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
     if (!measurementText && !measurementFiles.length) {
       window.alert("Please enter measurement text or choose measurement image.");
       return;
     }
-    const nextFiles = measurementFiles.length ? await app.enrichFilesWithContent(task.siteId, measurementFiles, {}) : [];
-    updateTask(taskId, (taskItem) => {
-      taskItem.measurementText = measurementText;
-      if (nextFiles.length) {
-        taskItem.measurementImages = taskItem.measurementImages.concat(nextFiles);
+    if (!measurementFiles.length) {
+      await updateTask(taskId, (taskItem) => {
+        taskItem.measurementText = measurementText;
+      }, "saveMeasurement");
+      return;
+    }
+    const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
+    const enrichedFiles = [];
+    for (const rawFile of Array.from(measurementFiles)) {
+      const [enriched] = await app.enrichFilesWithContent(task.siteId, [rawFile], {});
+      enrichedFiles.push(enriched);
+    }
+    const existingText = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer)?.measurementText || "";
+    const nextText = measurementText || existingText;
+    const uploaded = await uploadItemsSequentially(taskId, "measurement", enrichedFiles, (taskItem, file) => {
+      taskItem.measurementText = nextText;
+      taskItem.measurementImages = taskItem.measurementImages.concat(file);
+    });
+    if (uploaded) {
+      const currentTask = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
+      if (currentTask && currentTask.measurementText !== nextText) {
+        await updateTask(taskId, (taskItem) => {
+          taskItem.measurementText = nextText;
+        }, "saveMeasurement");
       }
-    }, "saveMeasurement");
+    }
+    document.getElementById("measurementUpload").value = "";
   }
 
   function removeFile(taskId, type, fileId) {
-    updateTask(taskId, (task) => {
-      if (type === "document") task.documents = task.documents.filter((item) => item.id !== fileId);
-      if (type === "photo") task.photos = task.photos.filter((item) => item.id !== fileId);
-      if (type === "measurement") task.measurementImages = task.measurementImages.filter((item) => item.id !== fileId);
-    }, "removeFile");
+    if (isUploadBusy(taskId)) return;
+    const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
+    if (!task) return;
+    app.showSyncStatus("Deleting file from Site ID Drive folder...", "working", true);
+    app.deleteDriveFile(state.settings.engineer, engineerSession, { siteId: task.siteId, fileId }).then((result) => {
+      if (!result?.ok) {
+        app.showSyncStatus(result?.message || "Unable to delete Drive file.", "error");
+        return;
+      }
+      updateTask(taskId, (taskItem) => {
+        if (type === "document") taskItem.documents = taskItem.documents.filter((item) => item.id !== fileId);
+        if (type === "photo") taskItem.photos = taskItem.photos.filter((item) => item.id !== fileId);
+        if (type === "measurement") taskItem.measurementImages = taskItem.measurementImages.filter((item) => item.id !== fileId);
+      }, "removeFile");
+      app.showSyncStatus("File deleted from Drive and task.", "success");
+      renderTaskDetail(taskId);
+    });
   }
 
   function clearGps(taskId) {
+    if (isUploadBusy(taskId)) return;
     updateTask(taskId, (task) => {
       task.gps = null;
       task.district = "";
@@ -517,6 +763,7 @@
   }
 
   function captureGps(taskId) {
+    if (isUploadBusy(taskId)) return;
     activeTaskId = taskId;
     if (!navigator.geolocation) {
       window.alert("Geolocation is not supported on this device.");
@@ -562,6 +809,7 @@
   }
 
   function applyMapGps() {
+    if (isUploadBusy(activeTaskId)) return;
     if (!selectedMapPoint || !activeTaskId) {
       window.alert("Please select a point on the map.");
       return;
@@ -634,13 +882,12 @@
   }
 
   function startCrossDeviceSync() {
-    clearInterval(syncTimer);
-    clearInterval(sessionTimer);
+    stopCrossDeviceSync();
     if (!state.settings.engineer.googleScriptUrl || !engineerSession?.userId || !engineerSession?.sessionToken) return;
+    if (state.settings.engineer.autoSyncEnabled === false) return;
     sessionTimer = setInterval(() => {
       validateActiveSession({ silent: true });
     }, 15000);
-    if (state.settings.engineer.autoSyncEnabled === false) return;
     syncTimer = setInterval(() => {
       syncFromGoogleState({ silent: true });
     }, 10000);
@@ -762,11 +1009,14 @@
       autoSyncEnabled: engineerAutoSyncInput.checked
     });
     app.writeState(state);
+    stopCrossDeviceSync();
     autofillEngineerSettings().finally(() => {
       refreshState();
       saveState("saveGoogleSetting", { ...state.settings.engineer });
-      syncFromGoogleState({ silent: false });
-      startCrossDeviceSync();
+      if (state.settings.engineer.autoSyncEnabled !== false) {
+        syncFromGoogleState({ silent: false });
+        startCrossDeviceSync();
+      }
       closeSettings();
     });
   });
@@ -777,6 +1027,7 @@
   });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden || !engineerSession) return;
+    if (state.settings.engineer.autoSyncEnabled === false) return;
     validateActiveSession({ silent: true }).then((isValid) => {
       if (isValid) syncFromGoogleState({ silent: true });
     });
