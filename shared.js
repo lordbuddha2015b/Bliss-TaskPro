@@ -1,6 +1,7 @@
 (function () {
   const STORAGE_KEY = "bliss-taskpro-state-v2";
-  const SETTINGS_KEY = "bliss-taskpro-settings-v1";
+  const MASTER_SETTINGS_KEY = "bliss-taskpro-master-settings";
+  const ENGINEER_SETTINGS_KEY = "bliss-taskpro-engineer-settings";
   const MASTER_SESSION_KEY = "bliss-taskpro-master-session";
   const ENGINEER_SESSION_KEY = "bliss-taskpro-engineer-session";
 
@@ -81,17 +82,26 @@
   }
 
   function readSettings() {
-    const raw = localStorage.getItem(SETTINGS_KEY);
+    return normalizeSettings({
+      master: readAppSettings(MASTER_SETTINGS_KEY),
+      engineer: readAppSettings(ENGINEER_SETTINGS_KEY)
+    }, cloneDefaults().settings);
+  }
+
+  function writeSettings(settings) {
+    const normalized = normalizeSettings(settings, cloneDefaults().settings);
+    localStorage.setItem(MASTER_SETTINGS_KEY, JSON.stringify(normalized.master));
+    localStorage.setItem(ENGINEER_SETTINGS_KEY, JSON.stringify(normalized.engineer));
+  }
+
+  function readAppSettings(key) {
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     try {
       return JSON.parse(raw);
     } catch (error) {
       return null;
     }
-  }
-
-  function writeSettings(settings) {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }
 
   function normalizeOptions(input, fallback) {
@@ -118,13 +128,19 @@
   }
 
   function clearLocalCache() {
-    const clean = cloneDefaults();
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(SETTINGS_KEY);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(clean.settings));
-    sessionStorage.removeItem(MASTER_SESSION_KEY);
-    sessionStorage.removeItem(ENGINEER_SESSION_KEY);
+    const appName = document.body?.dataset?.app === "engineer" ? "engineer" : "master";
+    const state = readState();
+    state.settings = normalizeSettings(state.settings, cloneDefaults().settings);
+    if (appName === "master") {
+      state.settings.master.googleScriptUrl = "";
+      localStorage.removeItem(MASTER_SETTINGS_KEY);
+      sessionStorage.removeItem(MASTER_SESSION_KEY);
+    } else {
+      state.settings.engineer.googleScriptUrl = "";
+      localStorage.removeItem(ENGINEER_SETTINGS_KEY);
+      sessionStorage.removeItem(ENGINEER_SESSION_KEY);
+    }
+    writeState(state);
   }
 
   function uid(prefix) {

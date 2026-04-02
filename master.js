@@ -33,6 +33,8 @@
   const activityMasterOther = document.getElementById("activityMasterOther");
   const draftSelector = document.getElementById("draftSelector");
   const districtSelect = document.getElementById("assignDistrict");
+  const assignmentFields = document.getElementById("assignment-fields");
+  const assignmentEmptyState = document.getElementById("assignment-empty-state");
 
   const assignSiteId = document.getElementById("assignSiteId");
   const assignDate = document.getElementById("assignDate");
@@ -183,6 +185,7 @@
     if (!drafts.length) {
       draftSelector.innerHTML = '<option value="">No draft available</option>';
       document.getElementById("frozen-summary").innerHTML = "";
+      toggleAssignmentVisibility(false);
       return;
     }
 
@@ -201,10 +204,12 @@
     const draft = state.drafts.find((item) => item.id === draftSelector.value);
     if (!draft) {
       host.innerHTML = "";
+      toggleAssignmentVisibility(false);
       return;
     }
 
     selectedDraftId = draft.id;
+    toggleAssignmentVisibility(true);
     host.innerHTML = `
       <span class="frozen-chip">Client: ${app.escapeHtml(draft.client)}</span>
       <span class="frozen-chip">Engineer: ${app.escapeHtml(draft.engineer)}</span>
@@ -353,7 +358,7 @@
 
     const pageWidth = pdf.internal.pageSize.getWidth();
 
-    const watermarkData = await toDataUrl("./Images/New Logo.png");
+    const watermarkData = await toDataUrl("./New Logo.png");
 
     function drawWatermark() {
       if (!watermarkData) return;
@@ -441,6 +446,7 @@
     y += 16;
     pdf.setFontSize(11);
     pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(0, 0, 0);
     sectionTitle("Site Details");
     line(`Site ID: ${task.siteId}`);
     line(`Client: ${task.client}`);
@@ -561,6 +567,15 @@
       text: `${latText}, ${lngText}`,
       url: `https://www.google.com/maps?q=${encodeURIComponent(latText)},${encodeURIComponent(lngText)}`
     };
+  }
+
+  function toggleAssignmentVisibility(show) {
+    assignmentFields?.classList.toggle("hidden", !show);
+    assignmentEmptyState?.classList.toggle("hidden", show);
+    [assignSiteId, assignDate, assignLocation, assignLatitude, assignLongitude, districtSelect, assignInstructions].forEach((field) => {
+      if (!field) return;
+      field.disabled = !show;
+    });
   }
 
   async function openTaskDetailModal(taskId) {
@@ -839,6 +854,7 @@
     selectedDraftId = "";
     draftSelector.value = "";
     renderFrozenSummary();
+    toggleAssignmentVisibility(false);
     assignmentForm.querySelector('button[type="submit"]').textContent = "Assign Task";
   }
 
@@ -995,6 +1011,7 @@
     renderDraftSelector();
     draftSelector.value = task.draftId;
     renderFrozenSummary();
+    toggleAssignmentVisibility(true);
     assignSiteId.value = task.siteId;
     assignDate.value = task.date;
     assignLocation.value = task.location;
