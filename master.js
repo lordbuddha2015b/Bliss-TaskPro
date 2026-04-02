@@ -6,6 +6,7 @@
   let currentEditDraftId = "";
   let currentEditTaskId = "";
   let currentOpenTaskId = "";
+  let pendingRollbackStatus = "";
   let masterSession = app.getMasterSession();
   let map;
   let mapMarker;
@@ -59,7 +60,6 @@
   function applyRemoteState(remoteState) {
     if (!remoteState) return;
     state.options = { ...state.options, ...(remoteState.options || {}) };
-    state.drafts = Array.isArray(remoteState.drafts) ? remoteState.drafts : state.drafts;
     state.tasks = Array.isArray(remoteState.tasks) ? remoteState.tasks : state.tasks;
     app.writeState(state);
     refreshAll();
@@ -479,6 +479,22 @@
       addLinksBlock("Measurement Images Google Drive Link", exportMeasurementImages);
     }
     addLinksBlock("Photos Google Drive Link", exportPhotos);
+    const pdfDataUri = pdf.output("datauristring");
+    const pdfBase64 = String(pdfDataUri).split(",")[1] || "";
+    if (pdfBase64 && masterSession) {
+      app.showSyncStatus("Saving PDF copy to Site ID Drive folder...", "working", true);
+      const reportResult = await app.savePdfToDrive(state.settings.master, masterSession, {
+        siteId: task.siteId,
+        fileName: `${task.siteId}_summary.pdf`,
+        mimeType: "application/pdf",
+        pdfBase64
+      });
+      if (reportResult?.ok) {
+        app.showSyncStatus("PDF downloaded and saved in Site ID Reports folder.", "success");
+      } else {
+        app.showSyncStatus(reportResult?.message || "PDF downloaded, but Drive save failed.", "error");
+      }
+    }
     pdf.save(`${task.siteId}_summary.pdf`);
   }
 
@@ -644,12 +660,19 @@
         </div>
 
         ${taskView.status === "Completed" ? `
-          <div class="form-grid">
-            <label class="full-span"><span>Rollback Reason</span><textarea id="rollbackReason"></textarea></label>
-          </div>
           <div class="action-row">
             <button id="rollback-to-wip" class="secondary-button" type="button">Rollback To WIP</button>
             <button id="rollback-to-pending" class="secondary-button" type="button">Rollback To Pending</button>
+          </div>
+          <div id="rollback-panel" class="${pendingRollbackStatus ? "" : "hidden"}">
+            <div class="form-grid">
+              <label class="full-span"><span>Rollback Reason</span><textarea id="rollbackReason">${app.escapeHtml(taskView.rollbackReason || "")}</textarea></label>
+            </div>
+            <div class="action-row">
+              <span class="fine-print">Selected rollback: ${app.escapeHtml(pendingRollbackStatus || "-")}</span>
+              <button id="confirm-rollback" class="secondary-button" type="button">Submit Rollback</button>
+              <button id="cancel-rollback" class="secondary-button" type="button">Cancel</button>
+            </div>
           </div>
         ` : ""}
 
@@ -678,16 +701,35 @@
     });
 
     if (taskView.status === "Completed") {
-      document.getElementById("rollback-to-wip").addEventListener("click", () => rollbackTask(task.id, "WIP"));
-      document.getElementById("rollback-to-pending").addEventListener("click", () => rollbackTask(task.id, "Pending"));
+      document.getElementById("rollback-to-wip").addEventListener("click", () => toggleRollbackPanel("WIP"));
+      document.getElementById("rollback-to-pending").addEventListener("click", () => toggleRollbackPanel("Pending"));
+      document.getElementById("confirm-rollback")?.addEventListener("click", () => rollbackTask(task.id));
+      document.getElementById("cancel-rollback")?.addEventListener("click", () => {
+        pendingRollbackStatus = "";
+        openTaskDetailModal(task.id);
+      });
     }
 
     document.getElementById("task-detail-modal").classList.remove("hidden");
   }
 
-  function rollbackTask(taskId, nextStatus) {
+  function toggleRollbackPanel(nextStatus) {
+    pendingRollbackStatus = nextStatus;
+    const rollbackPanel = document.getElementById("rollback-panel");
+    if (rollbackPanel) rollbackPanel.classList.remove("hidden");
+    const label = rollbackPanel?.querySelector(".fine-print");
+    if (label) label.textContent = `Selected rollback: ${nextStatus}`;
+    document.getElementById("rollbackReason")?.focus();
+  }
+
+  function rollbackTask(taskId) {
     const task = state.tasks.find((item) => item.id === taskId);
+    const nextStatus = pendingRollbackStatus;
     const reason = document.getElementById("rollbackReason")?.value.trim();
+    if (!nextStatus) {
+      window.alert("Please choose rollback target.");
+      return;
+    }
     if (!reason) {
       window.alert("Please enter rollback reason.");
       return;
@@ -699,12 +741,14 @@
     task.rollbackReason = reason;
     task.updatedAt = new Date().toISOString();
     saveState("rollbackTask", { taskId, nextStatus, reason });
+    pendingRollbackStatus = "";
     closeTaskDetailModal();
     refreshAll();
   }
 
   function closeTaskDetailModal() {
     currentOpenTaskId = "";
+    pendingRollbackStatus = "";
     document.getElementById("task-detail-modal").classList.add("hidden");
   }
 

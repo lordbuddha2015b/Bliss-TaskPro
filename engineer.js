@@ -20,13 +20,59 @@
   const engineerAutoSyncInput = document.getElementById("engineer-auto-sync");
   const engineerSyncButton = document.getElementById("engineer-sync-button");
 
+  function captureActiveFormState() {
+    if (!activeTaskId) return null;
+    return {
+      taskId: activeTaskId,
+      siteEngineerName: document.getElementById("siteEngineerName")?.value ?? null,
+      measurementText: document.getElementById("measurementText")?.value ?? null,
+      documentAnswer: document.getElementById("documentAnswer")?.value ?? null
+    };
+  }
+
+  function applyActiveFormState(snapshot) {
+    if (!snapshot || snapshot.taskId !== activeTaskId) return;
+    const siteEngineerInput = document.getElementById("siteEngineerName");
+    const measurementInput = document.getElementById("measurementText");
+    const documentAnswerInput = document.getElementById("documentAnswer");
+    if (siteEngineerInput && snapshot.siteEngineerName !== null) {
+      siteEngineerInput.value = snapshot.siteEngineerName;
+    }
+    if (measurementInput && snapshot.measurementText !== null) {
+      measurementInput.value = snapshot.measurementText;
+    }
+    if (documentAnswerInput && snapshot.documentAnswer !== null) {
+      documentAnswerInput.value = snapshot.documentAnswer;
+    }
+  }
+
   function applyRemoteState(remoteState) {
     if (!remoteState) return;
+    const activeFormSnapshot = captureActiveFormState();
     state.options = { ...state.options, ...(remoteState.options || {}) };
-    state.drafts = Array.isArray(remoteState.drafts) ? remoteState.drafts : state.drafts;
-    state.tasks = Array.isArray(remoteState.tasks) ? remoteState.tasks : state.tasks;
+    if (Array.isArray(remoteState.tasks)) {
+      if (activeTaskId) {
+        const localActiveTask = state.tasks.find((task) => task.id === activeTaskId);
+        state.tasks = remoteState.tasks.map((task) => {
+          if (task.id !== activeTaskId || !localActiveTask) return task;
+          return {
+            ...task,
+            siteEngineerName: localActiveTask.siteEngineerName,
+            measurementText: localActiveTask.measurementText,
+            documents: localActiveTask.documents,
+            photos: localActiveTask.photos,
+            measurementImages: localActiveTask.measurementImages,
+            gps: localActiveTask.gps,
+            updatedAt: localActiveTask.updatedAt
+          };
+        });
+      } else {
+        state.tasks = remoteState.tasks;
+      }
+    }
     app.writeState(state);
     renderSiteList();
+    applyActiveFormState(activeFormSnapshot);
   }
 
   function forceLogout(message) {

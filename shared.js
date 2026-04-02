@@ -252,6 +252,27 @@
     }
   }
 
+  async function savePdfToDrive(settings, session, payload) {
+    const endpoint = settings?.googleScriptUrl;
+    if (!endpoint) return { ok: false, message: "Apps Script URL is required in settings." };
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "savePdfToDrive",
+          source: session?.role || "master",
+          userId: session?.userId || "",
+          sessionToken: session?.sessionToken || "",
+          payload
+        })
+      });
+      return await response.json();
+    } catch (error) {
+      return { ok: false, message: error.message || "Unable to save PDF to Drive." };
+    }
+  }
+
   async function fetchGoogleTask(settings, siteId, session) {
     const endpoint = settings.googleScriptUrl;
     if (!endpoint || !siteId) return null;
@@ -506,6 +527,7 @@
     escapeHtml,
     loadDistricts,
     postGoogleSync,
+    savePdfToDrive,
     fetchGoogleTask,
     fetchGoogleState,
     reverseGeocodeDistrict,

@@ -99,4 +99,7 @@ Each Site ID gets its own Google Sheet named `SiteID_DataSheet`.
 ## Notes
 
 - UI theme, login system, manual Site ID entry, and status names remain unchanged.
-- Existing centralized task sheets are still read as a compatibility layer while the Site ID workspace model is adopted.
+- Sync now preserves local Master drafts until they are converted into tasks.
+- Engineer auto sync now preserves the active WIP form while refreshing task list and status changes.
+- Master PDF export now also saves a copy into the Site ID `Reports` folder in Drive.
+- Rollback reason input now appears only after a rollback option is selected in the completed task modal.

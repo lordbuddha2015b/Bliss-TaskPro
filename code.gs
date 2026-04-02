@@ -32,13 +32,18 @@ function doPost(e) {
   try {
     const payload = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     const action = String(payload.action || '').trim();
-    const task = normalizeTaskRecord_(payload.payload || {});
 
     if (action === 'login') return jsonOutput(loginUser_(payload.payload || {}));
     if (action === 'validateSession') return jsonOutput(validateSession_(payload));
 
     const sessionCheck = validateSession_(payload);
     if (!sessionCheck.ok) return jsonOutput(sessionCheck);
+
+    if (action === 'savePdfToDrive') {
+      return jsonOutput(savePdfToDrive_(payload.payload || {}));
+    }
+
+    const task = normalizeTaskRecord_(payload.payload || {});
 
     let siteWorkspace = null;
     let uploadedFiles = [];
@@ -250,6 +255,7 @@ function ensureSiteWorkspace_(siteId) {
   const documentsFolder = getOrCreateFolder_(siteFolder, 'Documents');
   const photosFolder = getOrCreateFolder_(siteFolder, 'Site Photos');
   const measurementFolder = getOrCreateFolder_(siteFolder, 'Measurement Photos');
+  const reportsFolder = getOrCreateFolder_(siteFolder, 'Reports');
   const spreadsheet = getOrCreateSpreadsheetInFolder_(siteFolder, trimmedSiteId + '_DataSheet');
 
   ensureSiteSheet_(spreadsheet, 'Master Entry', SITE_MASTER_HEADERS);
@@ -259,6 +265,7 @@ function ensureSiteWorkspace_(siteId) {
   shareDriveItem_(documentsFolder);
   shareDriveItem_(photosFolder);
   shareDriveItem_(measurementFolder);
+  shareDriveItem_(reportsFolder);
   shareDriveItem_(DriveApp.getFileById(spreadsheet.getId()));
 
   return {
@@ -267,6 +274,7 @@ function ensureSiteWorkspace_(siteId) {
     documentsFolder: documentsFolder,
     photosFolder: photosFolder,
     measurementFolder: measurementFolder,
+    reportsFolder: reportsFolder,
     spreadsheet: spreadsheet
   };
 }
@@ -287,6 +295,7 @@ function getSiteWorkspaceBySiteId_(siteId) {
       documentsFolder: getOrCreateFolder_(siteFolder, 'Documents'),
       photosFolder: getOrCreateFolder_(siteFolder, 'Site Photos'),
       measurementFolder: getOrCreateFolder_(siteFolder, 'Measurement Photos'),
+      reportsFolder: getOrCreateFolder_(siteFolder, 'Reports'),
       spreadsheet: spreadsheet
     };
   } catch (error) {
@@ -600,8 +609,38 @@ function siteWorkspaceToObject_(siteWorkspace) {
     documentsFolderId: siteWorkspace.documentsFolder.getId(),
     photosFolderId: siteWorkspace.photosFolder.getId(),
     measurementFolderId: siteWorkspace.measurementFolder.getId(),
+    reportsFolderId: siteWorkspace.reportsFolder.getId(),
     spreadsheetId: siteWorkspace.spreadsheet.getId(),
     spreadsheetName: siteWorkspace.spreadsheet.getName()
+  };
+}
+
+function savePdfToDrive_(payload) {
+  const siteId = String(payload.siteId || '').trim();
+  const pdfBase64 = String(payload.pdfBase64 || '').trim();
+  const fileName = String(payload.fileName || `${siteId}_summary.pdf`).trim();
+  if (!siteId) return { ok: false, message: 'Site ID is required to save PDF.' };
+  if (!pdfBase64) return { ok: false, message: 'PDF content is required.' };
+
+  const siteWorkspace = ensureSiteWorkspace_(siteId);
+  const reportsFolder = siteWorkspace.reportsFolder;
+  const existing = findFileByName_(reportsFolder, fileName);
+  if (existing) {
+    existing.setTrashed(true);
+  }
+
+  const blob = Utilities.newBlob(
+    Utilities.base64Decode(pdfBase64),
+    String(payload.mimeType || 'application/pdf'),
+    fileName
+  );
+  const file = reportsFolder.createFile(blob);
+  shareDriveItem_(file);
+
+  return {
+    ok: true,
+    file: makeFileDescriptor_(file, 'report'),
+    siteWorkspace: siteWorkspaceToObject_(siteWorkspace)
   };
 }
 
