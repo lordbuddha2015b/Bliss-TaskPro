@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bliss TaskPro | Engineer</title>
-  <link rel="icon" type="image/png" href="./Images/BlissTaskPro_Logo.png">
+  <link rel="icon" type="image/png" href="./Images/New Logo.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <link rel="stylesheet" href="./styles.css">
 </head>
@@ -13,7 +13,7 @@
 
   <div class="engineer-login-shell" id="engineer-login-screen">
     <div class="login-card">
-      <img class="brand-logo login-logo" src="./Images/BlissTaskPro_Logo.png" alt="Bliss TaskPro logo">
+      <img class="brand-logo login-logo" src="./Images/New Logo.png" alt="Bliss TaskPro logo">
       <h1 class="brand-title">Bliss TaskPro</h1>
       <form id="engineer-login-form" class="form-grid single-column">
         <label><span>Engineer User ID</span><input id="engineer-login-user" type="text" required></label>
@@ -29,19 +29,17 @@
     <aside class="sidebar">
       <div class="topbar-stack">
         <div class="brand-lockup compact-brand">
-          <img class="brand-logo topbar-logo" src="./Images/BlissTaskPro_Logo.png" alt="Bliss TaskPro logo">
+          <img class="brand-logo topbar-logo" src="./Images/New Logo.png" alt="Bliss TaskPro logo">
           <div class="brand-copy">
             <p class="eyebrow page-title-text">Engineer Workspace</p>
             <h1 class="brand-title compact-title">Bliss TaskPro</h1>
+            <p class="eyebrow credential-label">Engineer Login</p>
+            <p class="credential-text" id="engineer-user-eyebrow">Engineer Workspace</p>
           </div>
         </div>
         <div class="topbar-row">
           <div class="sidebar-nav compact-nav"></div>
           <div class="header-actions">
-            <div class="credential-panel">
-              <p class="eyebrow credential-label">Engineer Login</p>
-              <p class="credential-text" id="engineer-user-eyebrow">Engineer Workspace</p>
-            </div>
             <div class="action-row compact-actions">
               <button id="engineer-sync-button" class="secondary-button" type="button">Sync</button>
               <button id="engineer-logout" class="secondary-button" type="button">Logout</button>
@@ -53,7 +51,7 @@
 
     <main class="main-panel">
       <section class="grid-layout detail-grid engineer-detail-grid">
-        <article class="panel"><div id="engineer-task-detail" class="detail-panel empty-state">Click a Site ID to fetch task details.</div></article>
+        <article class="panel"><div id="engineer-task-detail" class="detail-panel empty-state"></div></article>
         <article class="panel">
           <div class="responsive-table">
             <table>
@@ -73,7 +71,7 @@
         <div class="stat-card"><span>WIP Tasks</span><strong id="engineer-wip-tasks">0</strong></div>
         <div class="stat-card"><span>Completed</span><strong id="engineer-completed-tasks">0</strong></div>
       </section>
-      <footer class="app-footer"><img class="footer-logo" src="./Images/BlissTaskPro_Logo.png" alt="Bliss TaskPro logo"></footer>
+      <footer class="app-footer"><img class="footer-logo" src="./Images/New Logo.png" alt="Bliss TaskPro logo"></footer>
     </main>
   </div>
 
@@ -90,14 +88,8 @@
       <div class="modal-header"><h4>Engineer Settings</h4><button type="button" id="close-engineer-settings-modal" class="secondary-button">Close</button></div>
       <div class="form-grid">
         <label class="full-span"><span>Apps Script URL</span><input id="engineer-google-script-url" type="url" placeholder="Paste Google Apps Script Web App URL"></label>
-        <div class="full-span advanced-settings-wrap">
-          <button id="engineer-advanced-settings-toggle" class="secondary-button" type="button">Advanced Settings</button>
-        </div>
-        <div id="engineer-advanced-settings" class="form-grid full-span hidden">
-          <label class="full-span toggle-row"><input id="engineer-auto-sync" type="checkbox"><span>Auto Sync Every Few Seconds</span></label>
-          <div class="full-span action-row">
-            <button id="engineer-clear-cache" class="secondary-button" type="button">Clear Cache</button>
-          </div>
+        <div class="full-span action-row">
+          <button id="engineer-clear-cache" class="secondary-button" type="button">Clear Cache</button>
         </div>
       </div>
       <div class="modal-footer"><div class="fine-print">These settings are for the Engineer app only.</div><button id="engineer-save-google-settings" class="primary-button" type="button">Save Settings</button></div>

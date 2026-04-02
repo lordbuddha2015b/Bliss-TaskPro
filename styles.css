@@ -1,17 +1,17 @@
 :root {
-  --primary: #4b4376;
-  --secondary: #ae445a;
-  --third: #e8bcb9;
-  --bg: #f7f2f1;
-  --panel: rgba(255, 249, 249, 0.9);
+  --primary: #4da6ff;
+  --secondary: #4da6ff;
+  --third: #d8efff;
+  --bg: #f3faff;
+  --panel: rgba(255, 255, 255, 0.92);
   --panel-strong: #fff;
-  --text: #2e2447;
-  --muted: #6e647d;
-  --border: rgba(75, 67, 118, 0.18);
-  --success: #3c8d54;
-  --warning: #d8892c;
-  --pending: #8d8a9a;
-  --shadow: 0 22px 55px rgba(75, 67, 118, 0.14);
+  --text: #16416a;
+  --muted: #5f7f9f;
+  --border: rgba(77, 166, 255, 0.2);
+  --success: #c3f7d0;
+  --warning: #ffd8a8;
+  --pending: #e5e5e5;
+  --shadow: 0 22px 55px rgba(77, 166, 255, 0.16);
 }
 
 * { box-sizing: border-box; }
@@ -32,7 +32,7 @@ body {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background-image: url("./Images/BlissTaskPro_Logo.png");
+  background-image: url("./Images/New Logo.png");
   background-repeat: no-repeat;
   background-position: center calc(50% + 72px);
   background-size: min(78vw, 980px);
@@ -61,8 +61,8 @@ button, input, select, textarea { font: inherit; }
   z-index: 5;
   height: auto;
   padding: 18px 20px 16px;
-  background: linear-gradient(180deg, var(--primary), #373057);
-  color: #fff5f6;
+  background: linear-gradient(135deg, #4da6ff, #80c1ff);
+  color: #f8fcff;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -105,6 +105,8 @@ button, input, select, textarea { font: inherit; }
   display: flex;
   flex-direction: column;
   gap: 4px;
+  align-items: flex-start;
+  text-align: left;
 }
 
 .page-title-text {
@@ -118,24 +120,16 @@ button, input, select, textarea { font: inherit; }
   gap: 18px;
 }
 
-.credential-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  text-align: right;
-  gap: 2px;
-}
-
 .credential-label {
   margin-bottom: 0;
-  opacity: 0.72;
+  opacity: 0.86;
 }
 
 .credential-text {
   margin: 0;
-  font-size: 1.22rem;
+  font-size: 1.8rem;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.03em;
   opacity: 0.98;
 }
 .compact-nav { gap: 8px; }
@@ -201,7 +195,7 @@ button, input, select, textarea { font: inherit; }
 .nav-chip {
   padding: 12px 16px;
   background: rgba(255, 255, 255, 0.14);
-  color: #fff5f6;
+  color: #f8fcff;
   font-weight: 800;
 }
 
@@ -322,21 +316,20 @@ textarea {
 
 .primary-button {
   color: #fff;
-  background: linear-gradient(135deg, var(--secondary), #8d3045);
-  box-shadow: 0 14px 28px rgba(174, 68, 90, 0.24);
+  background: linear-gradient(135deg, #4da6ff, #80c1ff);
+  box-shadow: 0 14px 28px rgba(77, 166, 255, 0.28);
 }
 
 .secondary-button,
 .site-link-button {
-  color: var(--primary);
-  background: rgba(75, 67, 118, 0.08);
+  color: #136dc6;
+  background: rgba(77, 166, 255, 0.12);
 }
 
 .compact-actions .secondary-button,
-.compact-actions .frozen-chip,
-.compact-actions .icon-button {
-  background: rgba(255, 255, 255, 0.26);
-  color: #fff7fb;
+.compact-actions .frozen-chip {
+  background: rgba(255, 255, 255, 0.22);
+  color: #f8fcff;
   border: 1px solid rgba(255, 255, 255, 0.35);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
 }
@@ -513,6 +506,17 @@ tbody td:not(:last-child)::after {
   border: 1px dashed var(--border);
   border-radius: 24px;
   color: var(--muted);
+}
+
+.welcome-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  text-align: center;
+  font-size: clamp(2rem, 5vw, 2.6rem);
+  font-weight: 800;
+  color: var(--primary);
 }
 
 .check-grid {
@@ -778,8 +782,7 @@ tbody td:not(:last-child)::after {
   .login-logo { width: 200px; height: 200px; }
   .form-grid { grid-template-columns: 1fr; }
   .topbar-row { flex-direction: column; align-items: stretch; }
-  .header-actions { flex-direction: column; align-items: stretch; }
-  .credential-panel { align-items: flex-start; text-align: left; }
+  .header-actions { width: 100%; justify-content: flex-start; }
   .compact-actions { justify-content: flex-start; }
   .modal-header,
   .modal-footer,

@@ -21,7 +21,6 @@
   const masterForm = document.getElementById("master-filter-form");
   const assignmentForm = document.getElementById("task-assignment-form");
   const googleScriptInput = document.getElementById("google-script-url");
-  const masterAutoSyncInput = document.getElementById("master-auto-sync");
   const masterSyncButton = document.getElementById("master-sync-button");
 
   const clientMaster = document.getElementById("clientMaster");
@@ -354,7 +353,7 @@
 
     const pageWidth = pdf.internal.pageSize.getWidth();
 
-    const watermarkData = await toDataUrl("./Images/BlissTaskPro_Logo.png");
+    const watermarkData = await toDataUrl("./Images/New Logo.png");
 
     function drawWatermark() {
       if (!watermarkData) return;
@@ -859,7 +858,6 @@
       currentEditDraftId = "";
     }
     googleScriptInput.value = state.settings.master.googleScriptUrl || "";
-    masterAutoSyncInput.checked = state.settings.master.autoSyncEnabled !== false;
     setOptions();
     toggleOtherField(clientMaster, clientMasterOther, "clientMasterOtherWrap", "client");
     toggleOtherField(engineerMaster, engineerMasterOther, "engineerMasterOtherWrap", "engineer");
@@ -1018,6 +1016,7 @@
   }
 
   function openSettings() {
+    googleScriptInput.value = state.settings.master.googleScriptUrl || "";
     document.getElementById("settings-modal").classList.remove("hidden");
   }
 
@@ -1195,15 +1194,12 @@
   });
   masterSyncButton?.addEventListener("click", syncFromGoogleState);
   document.getElementById("master-login-settings").addEventListener("click", openSettings);
-  document.getElementById("master-advanced-settings-toggle").addEventListener("click", () => {
-    document.getElementById("master-advanced-settings").classList.toggle("hidden");
-  });
   document.getElementById("master-clear-cache").addEventListener("click", clearCacheAndReset);
   document.getElementById("close-settings-modal").addEventListener("click", closeSettings);
   document.getElementById("save-google-settings").addEventListener("click", () => {
     state.settings.master = app.mergeGoogleSettings(state.settings.master, {
       googleScriptUrl: googleScriptInput.value,
-      autoSyncEnabled: masterAutoSyncInput.checked
+      autoSyncEnabled: state.settings.master.autoSyncEnabled !== false
     });
     app.writeState(state);
     stopCrossDeviceSync();

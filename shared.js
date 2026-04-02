@@ -118,8 +118,11 @@
   }
 
   function clearLocalCache() {
+    const clean = cloneDefaults();
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(SETTINGS_KEY);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(clean.settings));
     sessionStorage.removeItem(MASTER_SESSION_KEY);
     sessionStorage.removeItem(ENGINEER_SESSION_KEY);
   }

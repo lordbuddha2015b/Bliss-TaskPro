@@ -19,7 +19,6 @@
   const engineerLoginUser = document.getElementById("engineer-login-user");
   const engineerLoginPassword = document.getElementById("engineer-login-password");
   const engineerGoogleScriptInput = document.getElementById("engineer-google-script-url");
-  const engineerAutoSyncInput = document.getElementById("engineer-auto-sync");
   const engineerSyncButton = document.getElementById("engineer-sync-button");
 
   function captureActiveFormState() {
@@ -200,10 +199,15 @@
     const detailHost = document.getElementById("engineer-task-detail");
     renderStats(tasks);
 
+    function renderWelcomeState() {
+      const name = app.escapeHtml(currentEngineer || "Engineer");
+      detailHost.innerHTML = `<div class="welcome-banner">Hay !! ${name}</div>`;
+    }
+
     if (!tasks.length) {
       host.innerHTML = '<tr><td colspan="8"><div class="empty-state">No tasks assigned.</div></td></tr>';
       activeTaskId = "";
-      detailHost.innerHTML = app.emptyMarkup("Click a Site ID to fetch task details.");
+      renderWelcomeState();
       return;
     }
 
@@ -228,12 +232,12 @@
     });
 
     if (!activeTaskId) {
-      detailHost.innerHTML = app.emptyMarkup("Click a Site ID to open task details.");
+      renderWelcomeState();
       return;
     }
     if (!tasks.some((task) => task.id === activeTaskId)) {
       activeTaskId = "";
-      detailHost.innerHTML = app.emptyMarkup("Click a Site ID to open task details.");
+      renderWelcomeState();
       return;
     }
     renderTaskDetail(activeTaskId);
@@ -849,7 +853,6 @@
     appShell.classList.remove("hidden");
     document.getElementById("engineer-user-eyebrow").textContent = currentEngineer || "Engineer Workspace";
     engineerGoogleScriptInput.value = state.settings.engineer.googleScriptUrl || "";
-    engineerAutoSyncInput.checked = state.settings.engineer.autoSyncEnabled !== false;
     renderSiteList();
   }
 
@@ -923,7 +926,6 @@
 
   function openSettings() {
     engineerGoogleScriptInput.value = state.settings.engineer.googleScriptUrl || "";
-    engineerAutoSyncInput.checked = state.settings.engineer.autoSyncEnabled !== false;
     document.getElementById("engineer-settings-modal").classList.remove("hidden");
   }
 
@@ -1012,15 +1014,12 @@
   document.getElementById("save-engineer-map-point").addEventListener("click", applyMapGps);
   engineerSyncButton?.addEventListener("click", syncFromGoogleState);
   document.getElementById("engineer-login-settings").addEventListener("click", openSettings);
-  document.getElementById("engineer-advanced-settings-toggle").addEventListener("click", () => {
-    document.getElementById("engineer-advanced-settings").classList.toggle("hidden");
-  });
   document.getElementById("engineer-clear-cache").addEventListener("click", clearCacheAndReset);
   document.getElementById("close-engineer-settings-modal").addEventListener("click", closeSettings);
   document.getElementById("engineer-save-google-settings").addEventListener("click", () => {
     state.settings.engineer = app.mergeGoogleSettings(state.settings.engineer, {
       googleScriptUrl: engineerGoogleScriptInput.value,
-      autoSyncEnabled: engineerAutoSyncInput.checked
+      autoSyncEnabled: state.settings.engineer.autoSyncEnabled !== false
     });
     app.writeState(state);
     stopCrossDeviceSync();
