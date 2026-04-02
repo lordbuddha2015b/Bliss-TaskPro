@@ -30,9 +30,8 @@
       <div class="topbar-stack">
         <div class="brand-lockup compact-brand">
           <img class="brand-logo topbar-logo" src="./Images/BlissTaskPro_Logo.png" alt="Bliss TaskPro logo">
-          <div class="brand-copy brand-copy-right">
+          <div class="brand-copy">
             <p class="eyebrow page-title-text">Field Task Monitor</p>
-            <p class="eyebrow credential-text" id="master-user-eyebrow">Field Task Monitor</p>
             <h1 class="brand-title compact-title">Bliss TaskPro</h1>
           </div>
         </div>
@@ -42,9 +41,15 @@
             <button class="nav-chip" data-page-target="task-page">Task</button>
             <button class="nav-chip" data-page-target="details-page">Task Details</button>
           </nav>
-          <div class="action-row compact-actions">
-            <button id="master-logout" class="secondary-button" type="button">Logout</button>
-            <button id="master-sync-button" class="secondary-button" type="button">Sync</button>
+          <div class="header-actions">
+            <div class="credential-panel">
+              <p class="eyebrow credential-label">Master Login</p>
+              <p class="credential-text" id="master-user-eyebrow">Master Workspace</p>
+            </div>
+            <div class="action-row compact-actions">
+              <button id="master-sync-button" class="secondary-button" type="button">Sync</button>
+              <button id="master-logout" class="secondary-button" type="button">Logout</button>
+            </div>
           </div>
         </div>
       </div>
@@ -65,7 +70,7 @@
               <label><span>Client</span><select id="clientMaster" name="client" required></select></label>
               <label id="clientMasterOtherWrap" class="hidden"><span>Other Client</span><input id="clientMasterOther" name="clientOther" type="text"></label>
               <label><span>Engineer</span><select id="engineerMaster" name="engineer" required></select></label>
-              <label id="engineerMasterOtherWrap" class="hidden"><span>Add New Engineer</span><input id="engineerMasterOther" name="engineerOther" type="text"></label>
+              <label id="engineerMasterOtherWrap" class="hidden"><span>Add New Engineer</span><input id="engineerMasterOther" name="engineerOther" type="text" placeholder="Enter engineer name"></label>
               <label><span>Category</span><select id="categoryMaster" name="category" required></select></label>
               <label id="categoryMasterOtherWrap" class="hidden"><span>Other Category</span><input id="categoryMasterOther" name="categoryOther" type="text"></label>
               <label><span>Activity</span><select id="activityMaster" name="activity" required></select></label>

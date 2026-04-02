@@ -293,7 +293,7 @@
         <td>${app.escapeHtml(task.district || "-")}</td>
         <td>${task.documents.filter((item) => item.answer === "Yes").length}</td>
         <td>${task.photos.length}</td>
-        <td><button class="secondary-button status-action-button" data-open-task="${task.id}">${task.status}</button></td>
+        <td><button class="secondary-button status-action-button ${app.statusClass(task.status)}" data-open-task="${task.id}">${task.status}</button></td>
       </tr>
     `).join("");
 
@@ -451,7 +451,7 @@
     line(`Engineer: ${task.engineer}`, 112);
     line(`Site Engineer: ${task.siteEngineerName || "-"}`, 112);
     line(`Status: ${task.status}`, 112);
-    y += 10;
+    y += 18;
     sectionTitle("Task Info");
     const infoStartY = y;
     line(`Date: ${app.formatDate(task.date)}`);
@@ -477,7 +477,12 @@
     }
     if (share.includeGps) {
       sectionTitle("GPS");
-      line(task.gps ? `${task.gps.latitude}, ${task.gps.longitude}` : "-");
+      const gpsMeta = buildGpsMeta(task);
+      if (gpsMeta.url) {
+        link(`GPS: ${gpsMeta.text}`, gpsMeta.url);
+      } else {
+        line("GPS: -");
+      }
     }
     if (share.includeRollbackReason) {
       sectionTitle("Rollback Reason");
@@ -545,6 +550,20 @@
     return Array.from(map.values());
   }
 
+  function buildGpsMeta(task) {
+    const latitude = task?.gps?.latitude || task?.latitude || "";
+    const longitude = task?.gps?.longitude || task?.longitude || "";
+    if (!latitude || !longitude) {
+      return { text: "-", url: "" };
+    }
+    const latText = String(latitude);
+    const lngText = String(longitude);
+    return {
+      text: `${latText}, ${lngText}`,
+      url: `https://www.google.com/maps?q=${encodeURIComponent(latText)},${encodeURIComponent(lngText)}`
+    };
+  }
+
   async function openTaskDetailModal(taskId) {
     currentOpenTaskId = taskId;
     const task = state.tasks.find((item) => item.id === taskId);
@@ -602,6 +621,7 @@
       invoiceNumber: "",
       value: ""
     };
+    const gpsMeta = buildGpsMeta(taskView);
 
     host.innerHTML = `
       <div class="detail-panel">
@@ -623,7 +643,7 @@
         <div class="form-grid">
           <div><strong>Instructions</strong><p class="meta-line">${app.escapeHtml(taskView.instructions || "-")}</p></div>
           <div><strong>Measurement</strong><p class="meta-line">${app.escapeHtml(taskView.measurementText || "-")}</p></div>
-          <div><strong>GPS</strong><p class="meta-line">${taskView.gps ? `${taskView.gps.latitude}, ${taskView.gps.longitude}` : "-"}</p></div>
+          <div><strong>GPS</strong><p class="meta-line">${gpsMeta.url ? `<a href="${gpsMeta.url}" target="_blank" rel="noopener noreferrer">${app.escapeHtml(gpsMeta.text)}</a>` : "-"}</p></div>
           <div><strong>Rollback Reason</strong><p class="meta-line">${app.escapeHtml(taskView.rollbackReason || "-")}</p></div>
         </div>
 

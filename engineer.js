@@ -174,6 +174,20 @@
     return !!getUploadState(taskId).busy;
   }
 
+  function buildGpsMeta(task) {
+    const latitude = task?.gps?.latitude || task?.latitude || "";
+    const longitude = task?.gps?.longitude || task?.longitude || "";
+    if (!latitude || !longitude) {
+      return { text: "-", url: "" };
+    }
+    const latText = String(latitude);
+    const lngText = String(longitude);
+    return {
+      text: `${latText}, ${lngText}`,
+      url: `https://www.google.com/maps?q=${encodeURIComponent(latText)},${encodeURIComponent(lngText)}`
+    };
+  }
+
   function renderStats(tasks) {
     document.getElementById("engineer-total-tasks").textContent = tasks.length;
     document.getElementById("engineer-wip-tasks").textContent = app.countByStatus(tasks, "WIP");
@@ -202,7 +216,7 @@
         <td>${app.escapeHtml(task.district || "-")}</td>
         <td>${task.documents.filter((item) => item.answer === "Yes").length}</td>
         <td>${task.photos.length}</td>
-        <td><button class="secondary-button status-action-button" data-task-id="${task.id}">${task.status}</button></td>
+        <td><button class="secondary-button status-action-button ${app.statusClass(task.status)}" data-task-id="${task.id}">${task.status}</button></td>
       </tr>
     `).join("");
 
@@ -281,6 +295,7 @@
     const canStartWip = task.status === "Pending";
     const isUploading = !!uploadState.busy;
     const disableActions = isUploading || isCompleted;
+    const gpsMeta = buildGpsMeta(task);
     const sectionProgress = (section) => uploadState.section === section && uploadState.progressText
       ? `<p class="fine-print">${app.escapeHtml(uploadState.progressText)}</p>`
       : "";
@@ -303,8 +318,7 @@
           <div class="task-hero-side">
             <p><strong>Date:</strong> ${app.formatDate(task.date)}</p>
             <p><strong>Location:</strong> ${app.escapeHtml(task.location)}</p>
-            <p><strong>Latitude:</strong> ${app.escapeHtml(task.latitude || task.gps?.latitude || "-")}</p>
-            <p><strong>Longitude:</strong> ${app.escapeHtml(task.longitude || task.gps?.longitude || "-")}</p>
+            <p><strong>GPS:</strong> ${gpsMeta.url ? `<a href="${gpsMeta.url}" target="_blank" rel="noopener noreferrer">${app.escapeHtml(gpsMeta.text)}</a>` : "-"}</p>
             <p><strong>District:</strong> ${app.escapeHtml(task.district || "-")}</p>
           </div>
         </div>
@@ -383,10 +397,10 @@
             ${canEdit && !isCompleted ? `<button id="capture-gps" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>Capture GPS Location</button><button id="pick-gps-map" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>Open Map And Select</button><button id="clear-gps" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>Clear Location</button>` : ''}
           </div>
           <div class="form-grid">
-            <label><span>Completion Latitude</span><input id="completionLatitude" type="number" step="any" readonly value="${task.gps?.latitude || ""}"></label>
-            <label><span>Completion Longitude</span><input id="completionLongitude" type="number" step="any" readonly value="${task.gps?.longitude || ""}"></label>
+            <label class="full-span"><span>GPS</span><input id="completionGps" type="text" readonly value="${app.escapeHtml(gpsMeta.text)}"></label>
             <label><span>District</span><input id="completionDistrict" type="text" readonly value="${app.escapeHtml(task.district || "-")}"></label>
           </div>
+          ${gpsMeta.url ? `<p class="fine-print"><a href="${gpsMeta.url}" target="_blank" rel="noopener noreferrer">Open GPS in Google Maps</a></p>` : ""}
         </section>
 
         <div class="action-row">

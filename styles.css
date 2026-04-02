@@ -73,7 +73,6 @@ button, input, select, textarea { font: inherit; }
   display: flex;
   align-items: center;
   gap: 16px;
-  justify-content: space-between;
 }
 
 .brand-logo {
@@ -108,20 +107,36 @@ button, input, select, textarea { font: inherit; }
   gap: 4px;
 }
 
-.brand-copy-right {
-  flex: 1;
-  align-items: flex-end;
-  text-align: right;
-}
-
 .page-title-text {
   margin-bottom: 0;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+}
+
+.credential-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  gap: 2px;
+}
+
+.credential-label {
+  margin-bottom: 0;
+  opacity: 0.72;
+}
+
 .credential-text {
-  font-size: 1.02rem;
-  letter-spacing: 0.08em;
-  opacity: 0.95;
+  margin: 0;
+  font-size: 1.22rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  opacity: 0.98;
 }
 .compact-nav { gap: 8px; }
 .compact-actions { justify-content: flex-end; }
@@ -166,13 +181,21 @@ button, input, select, textarea { font: inherit; }
 }
 
 .nav-chip:hover,
-.primary-button:hover,
-.secondary-button:hover,
 .site-link-button:hover,
 .icon-button:hover,
 .mini-button:hover {
   transform: translateY(-1px);
-  filter: brightness(1.08);
+}
+
+.primary-button:hover {
+  filter: brightness(1.1);
+}
+
+.secondary-button:hover,
+.site-link-button:hover,
+.icon-button:hover,
+.mini-button:hover {
+  filter: brightness(1.15);
 }
 
 .nav-chip {
@@ -363,10 +386,15 @@ textarea {
   color: var(--primary);
 }
 
-.status-pill { color: #fff; min-width: 105px; }
-.status-pending { background: var(--pending); box-shadow: 0 0 18px rgba(141, 138, 154, 0.32); }
-.status-wip { background: var(--warning); box-shadow: 0 0 18px rgba(216, 137, 44, 0.34); }
-.status-completed { background: var(--success); box-shadow: 0 0 18px rgba(60, 141, 84, 0.3); }
+.status-pill { color: var(--text); min-width: 105px; }
+.status-pending { background: #e5e5e5; box-shadow: 0 0 18px rgba(160, 160, 160, 0.18); }
+.status-wip { background: #ffd8a8; box-shadow: 0 0 18px rgba(216, 137, 44, 0.2); }
+.status-completed { background: #c3f7d0; box-shadow: 0 0 18px rgba(60, 141, 84, 0.18); }
+.status-pending:hover,
+.status-wip:hover,
+.status-completed:hover {
+  filter: brightness(1.1);
+}
 
 .frozen-block {
   display: grid;
@@ -543,6 +571,7 @@ tbody td:not(:last-child)::after {
 
 .status-action-button {
   min-width: 110px;
+  color: var(--text);
 }
 
 .engineer-login-shell {
@@ -743,13 +772,14 @@ tbody td:not(:last-child)::after {
   .sidebar,
   .login-card { padding: 18px; }
   .brand-lockup { align-items: flex-start; }
-  .brand-copy-right { align-items: flex-start; text-align: left; }
   .brand-logo { width: 180px; height: 180px; }
   .topbar-logo { width: 92px; height: 92px; }
   .hero-logo,
   .login-logo { width: 200px; height: 200px; }
   .form-grid { grid-template-columns: 1fr; }
   .topbar-row { flex-direction: column; align-items: stretch; }
+  .header-actions { flex-direction: column; align-items: stretch; }
+  .credential-panel { align-items: flex-start; text-align: left; }
   .compact-actions { justify-content: flex-start; }
   .modal-header,
   .modal-footer,
