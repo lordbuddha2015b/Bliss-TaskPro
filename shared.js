@@ -15,18 +15,10 @@
     settings: {
       master: {
         googleScriptUrl: "",
-        googleSheetId: "",
-        googleDocumentFolderId: "",
-        googlePhotoFolderId: "",
-        googleMeasurementFolderId: "",
         autoSyncEnabled: false
       },
       engineer: {
         googleScriptUrl: "",
-        googleSheetId: "",
-        googleDocumentFolderId: "",
-        googlePhotoFolderId: "",
-        googleMeasurementFolderId: "",
         autoSyncEnabled: false
       }
     },
@@ -267,10 +259,6 @@
       const url = new URL(endpoint);
       url.searchParams.set("action", "getTask");
       url.searchParams.set("siteId", siteId);
-      url.searchParams.set("sheetId", settings.googleSheetId || "");
-      url.searchParams.set("documentFolderId", settings.googleDocumentFolderId || "");
-      url.searchParams.set("photoFolderId", settings.googlePhotoFolderId || "");
-      url.searchParams.set("measurementFolderId", settings.googleMeasurementFolderId || "");
       url.searchParams.set("source", session?.role || "");
       url.searchParams.set("userId", session?.userId || "");
       url.searchParams.set("sessionToken", session?.sessionToken || "");
@@ -291,10 +279,6 @@
     try {
       const url = new URL(endpoint);
       url.searchParams.set("action", "getState");
-      url.searchParams.set("sheetId", settings.googleSheetId || "");
-      url.searchParams.set("documentFolderId", settings.googleDocumentFolderId || "");
-      url.searchParams.set("photoFolderId", settings.googlePhotoFolderId || "");
-      url.searchParams.set("measurementFolderId", settings.googleMeasurementFolderId || "");
       url.searchParams.set("source", session?.role || "");
       url.searchParams.set("userId", session?.userId || "");
       url.searchParams.set("sessionToken", session?.sessionToken || "");
@@ -350,10 +334,7 @@
       const data = await response.json();
       if (!data?.ok) return null;
       return {
-        googleSheetId: sanitizeGoogleValue(data.sheetId),
-        googleDocumentFolderId: sanitizeGoogleValue(data.documentFolderId),
-        googlePhotoFolderId: sanitizeGoogleValue(data.photoFolderId),
-        googleMeasurementFolderId: sanitizeGoogleValue(data.measurementFolderId)
+        siteRootFolderId: sanitizeGoogleValue(data.siteRootFolderId)
       };
     } catch (error) {
       return null;
@@ -370,10 +351,6 @@
   function mergeGoogleSettings(currentSettings, nextSettings) {
     return {
       googleScriptUrl: sanitizeGoogleValue(nextSettings?.googleScriptUrl) || currentSettings?.googleScriptUrl || "",
-      googleSheetId: sanitizeGoogleValue(nextSettings?.googleSheetId) || currentSettings?.googleSheetId || "",
-      googleDocumentFolderId: sanitizeGoogleValue(nextSettings?.googleDocumentFolderId) || currentSettings?.googleDocumentFolderId || "",
-      googlePhotoFolderId: sanitizeGoogleValue(nextSettings?.googlePhotoFolderId) || currentSettings?.googlePhotoFolderId || "",
-      googleMeasurementFolderId: sanitizeGoogleValue(nextSettings?.googleMeasurementFolderId) || currentSettings?.googleMeasurementFolderId || "",
       autoSyncEnabled: typeof nextSettings?.autoSyncEnabled === "boolean"
         ? nextSettings.autoSyncEnabled
         : currentSettings?.autoSyncEnabled ?? false
@@ -418,10 +395,6 @@
     try {
       const url = new URL(endpoint);
       url.searchParams.set("action", "validateSession");
-      url.searchParams.set("sheetId", settings.googleSheetId || "");
-      url.searchParams.set("documentFolderId", settings.googleDocumentFolderId || "");
-      url.searchParams.set("photoFolderId", settings.googlePhotoFolderId || "");
-      url.searchParams.set("measurementFolderId", settings.googleMeasurementFolderId || "");
       url.searchParams.set("role", session.role || "");
       url.searchParams.set("userId", session.userId || "");
       url.searchParams.set("sessionToken", session.sessionToken || "");
@@ -486,9 +459,6 @@
 
   function formatLoginFailure(result) {
     const message = String(result?.message || result?.error || "Login failed.").trim();
-    if (/CONFIG\.SHEET_ID/i.test(message) || /Please update CONFIG\.SHEET_ID/i.test(message)) {
-      return `${message} Update SHEET_ID in Apps Script code.gs or save Google Sheet ID in Advanced Settings.`;
-    }
     if (/Credential sheet not found/i.test(message) || /Credential sheet is empty/i.test(message)) {
       return `${message} Check your Google Sheet tabs and login rows.`;
     }

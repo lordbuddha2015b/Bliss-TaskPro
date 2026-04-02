@@ -17,10 +17,6 @@
   const engineerLoginUser = document.getElementById("engineer-login-user");
   const engineerLoginPassword = document.getElementById("engineer-login-password");
   const engineerGoogleScriptInput = document.getElementById("engineer-google-script-url");
-  const engineerGoogleSheetInput = document.getElementById("engineer-google-sheet-id");
-  const engineerGoogleDocumentDriveInput = document.getElementById("engineer-google-document-drive-id");
-  const engineerGooglePhotoDriveInput = document.getElementById("engineer-google-photo-drive-id");
-  const engineerGoogleMeasurementDriveInput = document.getElementById("engineer-google-measurement-drive-id");
   const engineerAutoSyncInput = document.getElementById("engineer-auto-sync");
   const engineerSyncButton = document.getElementById("engineer-sync-button");
 
@@ -81,7 +77,19 @@
   }
 
   function getEngineerTasks() {
-    return state.tasks.filter((task) => task.engineer === currentEngineer);
+    const taskMap = new Map();
+    state.tasks
+      .filter((task) => task.engineer === currentEngineer)
+      .forEach((task) => {
+        const key = `${task.siteId || ""}::${task.baseTaskId || app.extractTaskBaseId(task.id) || task.id}`;
+        const existing = taskMap.get(key);
+        const nextStamp = String(task.updatedAt || task.createdAt || "");
+        const existingStamp = String(existing?.updatedAt || existing?.createdAt || "");
+        if (!existing || nextStamp >= existingStamp) {
+          taskMap.set(key, task);
+        }
+      });
+    return Array.from(taskMap.values());
   }
 
   function renderStats(tasks) {
@@ -267,7 +275,7 @@
           <div class="form-grid">
             <label><span>Completion Latitude</span><input id="completionLatitude" type="number" step="any" readonly value="${task.gps?.latitude || ""}"></label>
             <label><span>Completion Longitude</span><input id="completionLongitude" type="number" step="any" readonly value="${task.gps?.longitude || ""}"></label>
-            <label><span>District</span><select id="completionDistrict" ${!canEdit || isCompleted ? "disabled" : ""}></select></label>
+            <label><span>District</span><input id="completionDistrict" type="text" readonly value="${app.escapeHtml(task.district || "-")}"></label>
           </div>
         </section>
 
@@ -276,9 +284,6 @@
         </div>
       </div>
     `;
-
-    app.setOptions(document.getElementById("completionDistrict"), state.options.districts, "Select District");
-    document.getElementById("completionDistrict").value = task.district || "";
 
     if (canEdit && !isCompleted) {
       document.getElementById("documentAnswer").addEventListener("change", (event) => {
@@ -293,11 +298,6 @@
       document.getElementById("mark-completed")?.addEventListener("click", () => markCompleted(task.id));
       document.getElementById("siteEngineerName")?.addEventListener("change", () => scheduleLiveTaskUpdate(task.id));
       document.getElementById("measurementText")?.addEventListener("change", () => scheduleLiveTaskUpdate(task.id));
-      document.getElementById("completionDistrict")?.addEventListener("change", (event) => {
-        updateTask(task.id, (taskItem) => {
-          taskItem.district = String(event.target.value || "");
-        }, "updateDistrict");
-      });
       host.querySelectorAll("[data-remove]").forEach((button) => {
         button.addEventListener("click", () => removeFile(task.id, button.dataset.remove, button.dataset.fileId));
       });
@@ -484,7 +484,6 @@
             longitude: Number(position.coords.longitude.toFixed(6)),
             capturedAt: new Date().toISOString()
           };
-          task.district = document.getElementById("completionDistrict")?.value || task.district || "";
         }, "captureGps");
       },
       () => window.alert("Unable to capture GPS. Please allow location permission or use map select."),
@@ -529,7 +528,6 @@
           capturedAt: new Date().toISOString(),
           source: "map"
         };
-        task.district = district || task.district || "";
       }, "pickGpsOnMap");
       closeMap();
     });
@@ -542,10 +540,6 @@
       ? `Engineer Workspace | ${currentEngineer}`
       : "Engineer Workspace";
     engineerGoogleScriptInput.value = state.settings.engineer.googleScriptUrl || "";
-    engineerGoogleSheetInput.value = state.settings.engineer.googleSheetId || "";
-    engineerGoogleDocumentDriveInput.value = state.settings.engineer.googleDocumentFolderId || "";
-    engineerGooglePhotoDriveInput.value = state.settings.engineer.googlePhotoFolderId || "";
-    engineerGoogleMeasurementDriveInput.value = state.settings.engineer.googleMeasurementFolderId || "";
     engineerAutoSyncInput.checked = state.settings.engineer.autoSyncEnabled !== false;
     renderSiteList();
   }
@@ -621,10 +615,7 @@
 
   function openSettings() {
     engineerGoogleScriptInput.value = state.settings.engineer.googleScriptUrl || "";
-    engineerGoogleSheetInput.value = state.settings.engineer.googleSheetId || "";
-    engineerGoogleDocumentDriveInput.value = state.settings.engineer.googleDocumentFolderId || "";
-    engineerGooglePhotoDriveInput.value = state.settings.engineer.googlePhotoFolderId || "";
-    engineerGoogleMeasurementDriveInput.value = state.settings.engineer.googleMeasurementFolderId || "";
+    engineerAutoSyncInput.checked = state.settings.engineer.autoSyncEnabled !== false;
     document.getElementById("engineer-settings-modal").classList.remove("hidden");
   }
 
@@ -722,10 +713,6 @@
   document.getElementById("engineer-save-google-settings").addEventListener("click", () => {
     state.settings.engineer = app.mergeGoogleSettings(state.settings.engineer, {
       googleScriptUrl: engineerGoogleScriptInput.value,
-      googleSheetId: engineerGoogleSheetInput.value,
-      googleDocumentFolderId: engineerGoogleDocumentDriveInput.value,
-      googlePhotoFolderId: engineerGooglePhotoDriveInput.value,
-      googleMeasurementFolderId: engineerGoogleMeasurementDriveInput.value,
       autoSyncEnabled: engineerAutoSyncInput.checked
     });
     app.writeState(state);

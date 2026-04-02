@@ -56,6 +56,12 @@
     <main class="main-panel">
       <section id="master-page" class="page-section active">
         <div class="section-header"><h3>Master</h3></div>
+        <section class="stats-strip">
+          <div class="stat-card"><span>Total Tasks</span><strong id="master-total-tasks">0</strong></div>
+          <div class="stat-card"><span>Pending</span><strong id="master-pending-tasks">0</strong></div>
+          <div class="stat-card"><span>WIP</span><strong id="master-wip-tasks">0</strong></div>
+          <div class="stat-card"><span>Completed</span><strong id="master-completed-tasks">0</strong></div>
+        </section>
         <div class="grid-layout two-column">
           <article class="panel">
             <form id="master-filter-form" class="form-grid compact-form">
@@ -117,12 +123,6 @@
           </div>
         </article>
       </section>
-
-      <section class="stats-strip">
-        <div class="stat-card"><span>Total Tasks</span><strong id="master-total-tasks">0</strong></div>
-        <div class="stat-card"><span>WIP Tasks</span><strong id="master-wip-tasks">0</strong></div>
-        <div class="stat-card"><span>Completed</span><strong id="master-completed-tasks">0</strong></div>
-      </section>
       <footer class="app-footer"><img class="footer-logo" src="./Images/BlissTaskPro_Logo.png" alt="Bliss TaskPro logo"></footer>
     </main>
   </div>
@@ -145,9 +145,6 @@
         </div>
         <div id="master-advanced-settings" class="form-grid full-span hidden">
           <label class="full-span toggle-row"><input id="master-auto-sync" type="checkbox"><span>Auto Sync Every Few Seconds</span></label>
-          <label><span>Google Sheet ID</span><input id="google-sheet-id" type="text" placeholder="Paste Google Sheet ID"></label>
-          <label><span>Document Folder ID</span><input id="google-document-drive-id" type="text" placeholder="Paste Document Folder ID"></label>
-          <label><span>Photo Folder ID</span><input id="google-photo-drive-id" type="text" placeholder="Paste Photo Folder ID"></label>
           <div class="full-span action-row">
             <button id="master-clear-cache" class="secondary-button" type="button">Clear Cache</button>
           </div>

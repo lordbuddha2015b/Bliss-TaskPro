@@ -3,6 +3,7 @@
   let state = app.readState();
   let selectedDraftId = "";
   let selectedMapPoint = null;
+  let currentEditDraftId = "";
   let currentEditTaskId = "";
   let currentOpenTaskId = "";
   let masterSession = app.getMasterSession();
@@ -19,9 +20,6 @@
   const masterForm = document.getElementById("master-filter-form");
   const assignmentForm = document.getElementById("task-assignment-form");
   const googleScriptInput = document.getElementById("google-script-url");
-  const googleSheetInput = document.getElementById("google-sheet-id");
-  const googleDocumentDriveInput = document.getElementById("google-document-drive-id");
-  const googlePhotoDriveInput = document.getElementById("google-photo-drive-id");
   const masterAutoSyncInput = document.getElementById("master-auto-sync");
   const masterSyncButton = document.getElementById("master-sync-button");
 
@@ -137,6 +135,7 @@
 
   function renderStats() {
     document.getElementById("master-total-tasks").textContent = state.tasks.length;
+    document.getElementById("master-pending-tasks").textContent = app.countByStatus(state.tasks, "Pending");
     document.getElementById("master-wip-tasks").textContent = app.countByStatus(state.tasks, "WIP");
     document.getElementById("master-completed-tasks").textContent = app.countByStatus(state.tasks, "Completed");
   }
@@ -153,8 +152,19 @@
       <article class="stack-card">
         <h5>${app.escapeHtml(draft.client)} | ${app.escapeHtml(draft.engineer)}</h5>
         <p class="meta-line">${app.escapeHtml(draft.category)} | ${app.escapeHtml(draft.activity)}</p>
+        <div class="action-row">
+          <button class="secondary-button" type="button" data-edit-draft="${draft.id}">Edit Draft</button>
+          <button class="secondary-button" type="button" data-delete-draft="${draft.id}">Delete Draft</button>
+        </div>
       </article>
     `).join("");
+
+    host.querySelectorAll("[data-edit-draft]").forEach((button) => {
+      button.addEventListener("click", () => loadDraftForEdit(button.dataset.editDraft));
+    });
+    host.querySelectorAll("[data-delete-draft]").forEach((button) => {
+      button.addEventListener("click", () => deleteDraft(button.dataset.deleteDraft));
+    });
   }
 
   function getAvailableDrafts() {
@@ -194,6 +204,42 @@
       <span class="frozen-chip">Category: ${app.escapeHtml(draft.category)}</span>
       <span class="frozen-chip">Activity: ${app.escapeHtml(draft.activity)}</span>
     `;
+  }
+
+  function loadDraftForEdit(draftId) {
+    const draft = state.drafts.find((item) => item.id === draftId);
+    if (!draft) return;
+    currentEditDraftId = draft.id;
+    setSelectWithOther(clientMaster, clientMasterOther, "clientMasterOtherWrap", "clients", draft.client);
+    setSelectWithOther(engineerMaster, engineerMasterOther, "engineerMasterOtherWrap", "engineers", draft.engineer);
+    setSelectWithOther(categoryMaster, categoryMasterOther, "categoryMasterOtherWrap", "categories", draft.category);
+    setSelectWithOther(activityMaster, activityMasterOther, "activityMasterOtherWrap", "activities", draft.activity);
+    masterForm.querySelector('button[type="submit"]').textContent = "Update Draft";
+    document.querySelector('[data-page-target="master-page"]').click();
+  }
+
+  function deleteDraft(draftId) {
+    const draft = state.drafts.find((item) => item.id === draftId);
+    if (!draft) return;
+    const linkedTask = state.tasks.some((task) => task.draftId === draftId);
+    if (linkedTask) {
+      window.alert("Assigned drafts cannot be deleted.");
+      return;
+    }
+    state.drafts = state.drafts.filter((item) => item.id !== draftId);
+    if (currentEditDraftId === draftId) {
+      resetDraftForm();
+    }
+    saveState("deleteDraft", { draftId });
+    refreshAll();
+  }
+
+  function setSelectWithOther(select, input, wrapId, optionKey, value) {
+    const list = Array.isArray(state.options[optionKey]) ? state.options[optionKey] : [];
+    const hasPreset = list.includes(value);
+    select.value = hasPreset ? value : "Others";
+    input.value = hasPreset ? "" : value || "";
+    toggleOtherField(select, input, wrapId, optionKey);
   }
 
   function renderQueue() {
@@ -257,6 +303,7 @@
       includeMeasurementImages: document.getElementById("includeMeasurementImages")?.checked ?? true,
       includeInstructions: document.getElementById("includeInstructions")?.checked ?? true,
       includeGps: document.getElementById("includeGps")?.checked ?? true,
+      includeRollbackReason: document.getElementById("includeRollbackReason")?.checked ?? true,
       workOrder: document.getElementById("shareWorkOrder")?.value.trim() || "",
       billingStatus: document.getElementById("shareBillingStatus")?.value || "No",
       invoiceNumber: document.getElementById("shareInvoiceNumber")?.value.trim() || "",
@@ -419,6 +466,10 @@
       sectionTitle("GPS");
       line(task.gps ? `${task.gps.latitude}, ${task.gps.longitude}` : "-");
     }
+    if (share.includeRollbackReason) {
+      sectionTitle("Rollback Reason");
+      line(task.rollbackReason || "-");
+    }
     addLinksBlock("All Documents Google Drive Link", exportDocuments);
     if (share.includeMeasurement) {
       sectionTitle("Measurement");
@@ -504,6 +555,7 @@
       includeMeasurementImages: true,
       includeInstructions: true,
       includeGps: true,
+      includeRollbackReason: true,
       workOrder: "",
       billingStatus: "No",
       invoiceNumber: "",
@@ -581,6 +633,7 @@
           <label><input type="checkbox" id="includeMeasurement" ${share.includeMeasurement ? "checked" : ""}>Measurement Text</label>
           <label><input type="checkbox" id="includeInstructions" ${share.includeInstructions ? "checked" : ""}>Instructions</label>
           <label><input type="checkbox" id="includeGps" ${share.includeGps ? "checked" : ""}>GPS</label>
+          <label><input type="checkbox" id="includeRollbackReason" ${share.includeRollbackReason ? "checked" : ""}>Rollback Reason</label>
         </div>
 
         <div class="form-grid">
@@ -667,12 +720,22 @@
     assignmentForm.querySelector('button[type="submit"]').textContent = "Assign Task";
   }
 
+  function resetDraftForm() {
+    currentEditDraftId = "";
+    masterForm.reset();
+    masterForm.querySelector('button[type="submit"]').textContent = "Save Draft For Assignment";
+    toggleOtherField(clientMaster, clientMasterOther, "clientMasterOtherWrap", "client");
+    toggleOtherField(engineerMaster, engineerMasterOther, "engineerMasterOtherWrap", "engineer");
+    toggleOtherField(categoryMaster, categoryMasterOther, "categoryMasterOtherWrap", "category");
+    toggleOtherField(activityMaster, activityMasterOther, "activityMasterOtherWrap", "activity");
+  }
+
   function refreshAll() {
     state = app.readState();
+    if (currentEditDraftId && !state.drafts.some((draft) => draft.id === currentEditDraftId)) {
+      currentEditDraftId = "";
+    }
     googleScriptInput.value = state.settings.master.googleScriptUrl || "";
-    googleSheetInput.value = state.settings.master.googleSheetId || "";
-    googleDocumentDriveInput.value = state.settings.master.googleDocumentFolderId || "";
-    googlePhotoDriveInput.value = state.settings.master.googlePhotoFolderId || "";
     masterAutoSyncInput.checked = state.settings.master.autoSyncEnabled !== false;
     setOptions();
     toggleOtherField(clientMaster, clientMasterOther, "clientMasterOtherWrap", "client");
@@ -684,6 +747,7 @@
     renderQueue();
     renderTaskTable();
     renderStats();
+    masterForm.querySelector('button[type="submit"]').textContent = currentEditDraftId ? "Update Draft" : "Save Draft For Assignment";
   }
 
   async function syncFromGoogleState(options = {}) {
@@ -882,10 +946,26 @@
     pushOptionIfMissing("categories", category);
     pushOptionIfMissing("activities", activity);
 
-    const draft = { id: app.uid("draft"), client, engineer, category, activity, createdAt: new Date().toISOString() };
-    state.drafts.push(draft);
-    saveState("saveDraft", draft);
-    masterForm.reset();
+    if (currentEditDraftId) {
+      const draft = state.drafts.find((item) => item.id === currentEditDraftId);
+      if (!draft) {
+        window.alert("Draft not found.");
+        return;
+      }
+      Object.assign(draft, {
+        client,
+        engineer,
+        category,
+        activity,
+        updatedAt: new Date().toISOString()
+      });
+      saveState("updateDraft", draft);
+    } else {
+      const draft = { id: app.uid("draft"), client, engineer, category, activity, createdAt: new Date().toISOString() };
+      state.drafts.push(draft);
+      saveState("saveDraft", draft);
+    }
+    resetDraftForm();
     refreshAll();
   });
 
@@ -999,9 +1079,6 @@
   document.getElementById("save-google-settings").addEventListener("click", () => {
     state.settings.master = app.mergeGoogleSettings(state.settings.master, {
       googleScriptUrl: googleScriptInput.value,
-      googleSheetId: googleSheetInput.value,
-      googleDocumentFolderId: googleDocumentDriveInput.value,
-      googlePhotoFolderId: googlePhotoDriveInput.value,
       autoSyncEnabled: masterAutoSyncInput.checked
     });
     app.writeState(state);
