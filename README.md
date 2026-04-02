@@ -17,6 +17,9 @@ Bliss TaskPro includes a Master web app and an Engineer web app for draft creati
 - PDF export from Master review
 - Auto Sync toggle for Master and Engineer with manual sync fallback
 - Sequential file upload queue with retry and progress feedback
+- Century Gothic based UI styling across Master and Engineer pages
+- Master and Engineer task tables with serial numbering and status actions at the end
+- Manual latitude and longitude entry in Master task assignment with automatic district lookup
 
 ## Workflow
 
@@ -111,7 +114,13 @@ Each Site ID gets its own Google Sheet named `SiteID_DataSheet`.
 - With Auto Sync OFF, refresh, manual sync, and task-save actions still update data, but no background interval runs.
 - Engineer auto sync now preserves the active WIP form while refreshing task list and status changes.
 - Active Engineer upload sessions lock action buttons, show progress text, and upload files one-by-one with automatic retries.
+- Master header and Engineer header now place workspace title and logged-in credential text on the top-right, with Logout moved into the top action area.
+- Master task assignment now supports manual latitude/longitude entry and auto-fills district from reverse geocoding while still keeping the GPS/map helpers.
+- Master draft creation continues to support existing engineers and also saves manually entered engineers back into shared options for future dropdown use.
+- Master and Engineer task tables now show serial numbers first and move the interactive status button to the final column.
+- Engineer task detail now shows assigned location, latitude, longitude, and district together for easier site verification.
 - Master PDF export now also saves a copy into the Site ID `Reports` folder in Drive.
+- PDF task info now includes location, latitude, longitude, and district with improved alignment against the billing block.
 - Rollback reason input now appears only after a rollback option is selected in the completed task modal.
 - Engineer task details now fetch and display previously uploaded Drive files for documents, photos, and measurement images.
 - Master task details now allow selecting individual documents, photos, and measurement images before saving a report.

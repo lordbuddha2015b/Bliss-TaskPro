@@ -46,15 +46,13 @@
     masterLoginScreen.classList.add("hidden");
     masterAppShell.classList.remove("hidden");
     document.getElementById("master-login-debug").classList.add("hidden");
-    document.getElementById("master-user-eyebrow").textContent = masterSession?.name
-      ? `Field Task Monitor | ${masterSession.name}`
-      : "Field Task Monitor";
+    document.getElementById("master-user-eyebrow").textContent = masterSession?.name || "Master Workspace";
   }
 
   function showMasterLogin() {
     masterLoginScreen.classList.remove("hidden");
     masterAppShell.classList.add("hidden");
-    document.getElementById("master-user-eyebrow").textContent = "Field Task Monitor";
+    document.getElementById("master-user-eyebrow").textContent = "Master Workspace";
   }
 
   function applyRemoteState(remoteState) {
@@ -185,7 +183,7 @@
     const drafts = getAvailableDrafts();
     if (!drafts.length) {
       draftSelector.innerHTML = '<option value="">No draft available</option>';
-      document.getElementById("frozen-summary").innerHTML = app.emptyMarkup("Only unassigned drafts are shown.");
+      document.getElementById("frozen-summary").innerHTML = "";
       return;
     }
 
@@ -203,7 +201,7 @@
     const host = document.getElementById("frozen-summary");
     const draft = state.drafts.find((item) => item.id === draftSelector.value);
     if (!draft) {
-      host.innerHTML = app.emptyMarkup("Select a saved draft.");
+      host.innerHTML = "";
       return;
     }
 
@@ -286,16 +284,16 @@
       return;
     }
 
-    host.innerHTML = state.tasks.slice().reverse().map((task) => `
+    host.innerHTML = state.tasks.slice().reverse().map((task, index) => `
       <tr>
-        <td><span class="status-pill ${app.statusClass(task.status)}">${task.status}</span></td>
+        <td>${index + 1}</td>
         <td><button class="site-link-button" data-open-task="${task.id}">${app.escapeHtml(task.siteId)}</button></td>
         <td>${app.escapeHtml(task.engineer)}</td>
         <td>${app.escapeHtml(task.siteEngineerName || "-")}</td>
         <td>${app.escapeHtml(task.district || "-")}</td>
         <td>${task.documents.filter((item) => item.answer === "Yes").length}</td>
         <td>${task.photos.length}</td>
-        <td><button class="secondary-button" data-open-task="${task.id}">${task.status}</button></td>
+        <td><button class="secondary-button status-action-button" data-open-task="${task.id}">${task.status}</button></td>
       </tr>
     `).join("");
 
@@ -438,7 +436,7 @@
     }
 
     drawWatermark();
-    pdf.setFont("times", "bolditalic");
+    pdf.setFont("helvetica", "bold");
     pdf.setFontSize(30);
     pdf.text("Bliss TaskPro", pageWidth / 2, y, { align: "center" });
     y += 16;
@@ -453,12 +451,14 @@
     line(`Engineer: ${task.engineer}`, 112);
     line(`Site Engineer: ${task.siteEngineerName || "-"}`, 112);
     line(`Status: ${task.status}`, 112);
-    y += 7;
+    y += 10;
     sectionTitle("Task Info");
     const infoStartY = y;
     line(`Date: ${app.formatDate(task.date)}`);
-    line(`District: ${task.district || "-"}`);
     line(`Location: ${task.location}`);
+    line(`Latitude: ${task.latitude || task.gps?.latitude || "-"}`);
+    line(`Longitude: ${task.longitude || task.gps?.longitude || "-"}`);
+    line(`District: ${task.district || "-"}`);
     const afterTaskInfoY = y;
     y = infoStartY;
     pdf.setFontSize(14);
@@ -1150,8 +1150,8 @@
     renderFrozenSummary();
   });
 
-  assignLatitude.addEventListener("change", syncDistrictFromInputs);
-  assignLongitude.addEventListener("change", syncDistrictFromInputs);
+  assignLatitude.addEventListener("input", syncDistrictFromInputs);
+  assignLongitude.addEventListener("input", syncDistrictFromInputs);
 
   navButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -1159,6 +1159,9 @@
       sections.forEach((section) => section.classList.remove("active"));
       button.classList.add("active");
       document.getElementById(button.dataset.pageTarget).classList.add("active");
+      if (button.dataset.pageTarget === "task-page" && !currentEditTaskId) {
+        resetAssignmentForm();
+      }
     });
   });
 
@@ -1170,7 +1173,6 @@
     await applyCoords(selectedMapPoint.lat.toFixed(6), selectedMapPoint.lng.toFixed(6));
     closeMap();
   });
-  document.getElementById("open-settings-modal").addEventListener("click", openSettings);
   masterSyncButton?.addEventListener("click", syncFromGoogleState);
   document.getElementById("master-login-settings").addEventListener("click", openSettings);
   document.getElementById("master-advanced-settings-toggle").addEventListener("click", () => {

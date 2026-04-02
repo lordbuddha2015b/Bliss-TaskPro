@@ -19,7 +19,7 @@
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: "Manrope", sans-serif;
+  font-family: "Century Gothic", Arial, sans-serif;
   color: var(--text);
   background:
     radial-gradient(circle at top left, rgba(174, 68, 90, 0.15), transparent 28%),
@@ -60,7 +60,7 @@ button, input, select, textarea { font: inherit; }
   top: 10px;
   z-index: 5;
   height: auto;
-  padding: 18px 18px 16px;
+  padding: 18px 20px 16px;
   background: linear-gradient(180deg, var(--primary), #373057);
   color: #fff5f6;
   display: flex;
@@ -73,6 +73,7 @@ button, input, select, textarea { font: inherit; }
   display: flex;
   align-items: center;
   gap: 16px;
+  justify-content: space-between;
 }
 
 .brand-logo {
@@ -96,17 +97,37 @@ button, input, select, textarea { font: inherit; }
 .topbar-row {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
+  gap: 14px;
   align-items: center;
 }
 
 .compact-brand { align-items: center; }
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.brand-copy-right {
+  flex: 1;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.page-title-text {
+  margin-bottom: 0;
+}
+
+.credential-text {
+  font-size: 1.02rem;
+  letter-spacing: 0.08em;
+  opacity: 0.95;
+}
 .compact-nav { gap: 8px; }
 .compact-actions { justify-content: flex-end; }
 
 .brand-title {
   margin: 0;
-  font-family: "Sora", "Manrope", sans-serif;
   font-size: clamp(2rem, 4vw, 3.3rem);
   line-height: 1;
   letter-spacing: 0.02em;
@@ -147,7 +168,12 @@ button, input, select, textarea { font: inherit; }
 .nav-chip:hover,
 .primary-button:hover,
 .secondary-button:hover,
-.site-link-button:hover { transform: translateY(-1px); }
+.site-link-button:hover,
+.icon-button:hover,
+.mini-button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
 
 .nav-chip {
   padding: 12px 16px;
@@ -200,19 +226,6 @@ button, input, select, textarea { font: inherit; }
 .compact-hero { display: none; }
 .hero-brand { justify-content: center; }
 .hero-brand-fixed { flex: 1; }
-
-.icon-button {
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 50%;
-  background: rgba(75, 67, 118, 0.1);
-  color: var(--primary);
-  font-size: 1rem;
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: var(--shadow);
-}
 
 .page-section { display: none; }
 .page-section.active { display: block; }
@@ -358,10 +371,11 @@ textarea {
 .frozen-block {
   display: grid;
   gap: 12px;
-  padding: 16px;
+  padding: 10px 12px;
   border-radius: 20px;
   background: rgba(232, 188, 185, 0.26);
   border: 1px solid rgba(174, 68, 90, 0.16);
+  min-height: 58px;
 }
 
 .responsive-table {
@@ -387,6 +401,18 @@ tbody td {
   padding: 14px;
   border-top: 1px solid rgba(75, 67, 118, 0.08);
   vertical-align: top;
+  position: relative;
+}
+
+thead th:not(:last-child)::after,
+tbody td:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 10%;
+  right: 0;
+  width: 1px;
+  height: 80%;
+  background: linear-gradient(180deg, rgba(160, 160, 160, 0), rgba(160, 160, 160, 0.45), rgba(160, 160, 160, 0));
 }
 
 .stats-strip {
@@ -513,6 +539,10 @@ tbody td {
 .site-link-button {
   width: 100%;
   justify-content: center;
+}
+
+.status-action-button {
+  min-width: 110px;
 }
 
 .engineer-login-shell {
@@ -713,6 +743,7 @@ tbody td {
   .sidebar,
   .login-card { padding: 18px; }
   .brand-lockup { align-items: flex-start; }
+  .brand-copy-right { align-items: flex-start; text-align: left; }
   .brand-logo { width: 180px; height: 180px; }
   .topbar-logo { width: 92px; height: 92px; }
   .hero-logo,

@@ -492,7 +492,10 @@
   function showSyncStatus(message, tone = "working", persist = false) {
     const host = getStatusHost();
     host.className = `floating-sync-status tone-${tone}`;
-    host.querySelector(".floating-sync-status__text").textContent = message;
+    const normalizedMessage = String(message || "") === "Fetching latest updates from Google Sheets and Drive..."
+      ? "Please Wait, Saving data."
+      : message;
+    host.querySelector(".floating-sync-status__text").textContent = normalizedMessage;
     host.classList.remove("hidden");
     if (!persist) {
       clearTimeout(showSyncStatus.timeoutId);

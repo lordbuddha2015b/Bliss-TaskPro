@@ -187,22 +187,23 @@
     renderStats(tasks);
 
     if (!tasks.length) {
-      host.innerHTML = app.emptyMarkup("No tasks assigned.");
+      host.innerHTML = '<tr><td colspan="8"><div class="empty-state">No tasks assigned.</div></td></tr>';
       activeTaskId = "";
       detailHost.innerHTML = app.emptyMarkup("Click a Site ID to fetch task details.");
       return;
     }
 
-    host.innerHTML = tasks.slice().reverse().map((task) => `
-      <article class="site-card">
-        <h5>${app.escapeHtml(task.siteId)}</h5>
-        <p class="meta-line">${app.formatDate(task.date)} | ${app.escapeHtml(task.district || "-")}</p>
-        <p class="meta-line">${app.escapeHtml(task.client)} | ${app.escapeHtml(task.category)} | ${app.escapeHtml(task.activity)}</p>
-        <div class="action-row">
-          <span class="status-pill ${app.statusClass(task.status)}">${task.status}</span>
-          <button class="site-link-button" data-task-id="${task.id}">Open Site ID</button>
-        </div>
-      </article>
+    host.innerHTML = tasks.slice().reverse().map((task, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td><button class="site-link-button" data-task-id="${task.id}">${app.escapeHtml(task.siteId)}</button></td>
+        <td>${app.escapeHtml(task.engineer)}</td>
+        <td>${app.escapeHtml(task.siteEngineerName || "-")}</td>
+        <td>${app.escapeHtml(task.district || "-")}</td>
+        <td>${task.documents.filter((item) => item.answer === "Yes").length}</td>
+        <td>${task.photos.length}</td>
+        <td><button class="secondary-button status-action-button" data-task-id="${task.id}">${task.status}</button></td>
+      </tr>
     `).join("");
 
     host.querySelectorAll("[data-task-id]").forEach((button) => {
@@ -302,6 +303,8 @@
           <div class="task-hero-side">
             <p><strong>Date:</strong> ${app.formatDate(task.date)}</p>
             <p><strong>Location:</strong> ${app.escapeHtml(task.location)}</p>
+            <p><strong>Latitude:</strong> ${app.escapeHtml(task.latitude || task.gps?.latitude || "-")}</p>
+            <p><strong>Longitude:</strong> ${app.escapeHtml(task.longitude || task.gps?.longitude || "-")}</p>
             <p><strong>District:</strong> ${app.escapeHtml(task.district || "-")}</p>
           </div>
         </div>
@@ -830,9 +833,7 @@
   function showApp() {
     loginScreen.classList.add("hidden");
     appShell.classList.remove("hidden");
-    document.getElementById("engineer-user-eyebrow").textContent = currentEngineer
-      ? `Engineer Workspace | ${currentEngineer}`
-      : "Engineer Workspace";
+    document.getElementById("engineer-user-eyebrow").textContent = currentEngineer || "Engineer Workspace";
     engineerGoogleScriptInput.value = state.settings.engineer.googleScriptUrl || "";
     engineerAutoSyncInput.checked = state.settings.engineer.autoSyncEnabled !== false;
     renderSiteList();
@@ -996,7 +997,6 @@
   document.getElementById("close-engineer-map-modal").addEventListener("click", closeMap);
   document.getElementById("save-engineer-map-point").addEventListener("click", applyMapGps);
   engineerSyncButton?.addEventListener("click", syncFromGoogleState);
-  document.getElementById("engineer-open-settings-modal").addEventListener("click", openSettings);
   document.getElementById("engineer-login-settings").addEventListener("click", openSettings);
   document.getElementById("engineer-advanced-settings-toggle").addEventListener("click", () => {
     document.getElementById("engineer-advanced-settings").classList.toggle("hidden");
