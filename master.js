@@ -142,6 +142,20 @@
     state.options[key].sort((a, b) => a.localeCompare(b));
   }
 
+  async function syncEngineerOptionsFromCredentialSheet(options = {}) {
+    const { rerender = false } = options;
+    const remoteEngineers = await app.fetchEngineerOptionsFromCredentialSheet();
+    if (!remoteEngineers.length) return;
+    const nextEngineers = Array.from(new Set([...(state.options.engineers || []), ...remoteEngineers]))
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+    const changed = JSON.stringify(nextEngineers) !== JSON.stringify(state.options.engineers || []);
+    if (!changed) return;
+    state.options.engineers = nextEngineers;
+    app.writeState(state);
+    if (rerender) refreshAll();
+  }
+
   function renderStats() {
     document.getElementById("master-total-tasks").textContent = state.tasks.length;
     document.getElementById("master-pending-tasks").textContent = app.countByStatus(state.tasks, "Pending");
@@ -182,6 +196,7 @@
 
   function renderDraftSelector() {
     const drafts = getAvailableDrafts();
+    draftSelector.classList.toggle("draft-glow", !!drafts.length);
     if (!drafts.length) {
       draftSelector.innerHTML = '<option value="">No draft available</option>';
       document.getElementById("frozen-summary").innerHTML = "";
@@ -257,22 +272,26 @@
   function renderQueue() {
     const host = document.getElementById("queue-list");
     if (!state.tasks.length) {
-      host.innerHTML = app.emptyMarkup("No task assigned.");
+      host.innerHTML = '<tr><td colspan="5"><div class="empty-state">No task assigned.</div></td></tr>';
       return;
     }
 
-    host.innerHTML = state.tasks.slice().reverse().map((task) => `
-      <article class="stack-card">
-        <h5>${app.escapeHtml(task.siteId)}</h5>
-        <p class="meta-line">${app.escapeHtml(task.client)} | ${app.escapeHtml(task.engineer)}</p>
-        <p class="meta-line">${app.formatDate(task.date)} | ${app.escapeHtml(task.district)}</p>
-        <div class="action-row">
-          <span class="status-pill ${app.statusClass(task.status)}">${task.status}</span>
-          ${task.status === "Pending" ? `<button class="secondary-button" data-edit-task="${task.id}">Edit</button><button class="secondary-button" data-delete-task="${task.id}">Delete</button>` : ""}
-        </div>
-      </article>
+    host.innerHTML = state.tasks.slice().reverse().map((task, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td><button class="site-link-button" type="button" data-open-task="${task.id}">${app.escapeHtml(task.siteId)}</button></td>
+        <td>${app.escapeHtml(task.engineer)}</td>
+        <td>${app.escapeHtml(task.district || "-")}</td>
+        <td>
+          <button class="secondary-button status-action-button status-static-button ${app.statusClass(task.status)}" type="button" data-open-task="${task.id}">${task.status}</button>
+          ${task.status === "Pending" ? `<div class="queue-inline-actions"><button class="mini-button" type="button" data-edit-task="${task.id}">Edit</button><button class="mini-button" type="button" data-delete-task="${task.id}">Delete</button></div>` : ""}
+        </td>
+      </tr>
     `).join("");
 
+    host.querySelectorAll("[data-open-task]").forEach((button) => {
+      button.addEventListener("click", () => openTaskDetailModal(button.dataset.openTask));
+    });
     host.querySelectorAll("[data-edit-task]").forEach((button) => {
       button.addEventListener("click", () => loadTaskForEdit(button.dataset.editTask));
     });
@@ -345,6 +364,7 @@
     const { download = true, saveDriveCopy = true } = options;
     const jsPDF = window.jspdf?.jsPDF;
     if (!jsPDF) return;
+    app.showSyncStatus("Exporting...", "working", true);
     const pdf = new jsPDF();
     const selectedDocs = task.documents.filter((item) => share.selectedDocuments.includes(item.id));
     const selectedPhotos = task.photos.filter((item) => share.selectedPhotos.includes(item.id));
@@ -461,8 +481,7 @@
     const infoStartY = y;
     line(`Date: ${app.formatDate(task.date)}`);
     line(`Location: ${task.location}`);
-    line(`Latitude: ${task.latitude || task.gps?.latitude || "-"}`);
-    line(`Longitude: ${task.longitude || task.gps?.longitude || "-"}`);
+    line(`GPS: ${share.includeGps ? buildGpsMeta(task).text : "-"}`);
     line(`District: ${task.district || "-"}`);
     const afterTaskInfoY = y;
     y = infoStartY;
@@ -473,21 +492,12 @@
     pdf.setFont(undefined, "normal");
     line(`WO: ${share.workOrder || "-"}`, 112);
     line(`Billing Status: ${share.billingStatus}`, 112);
-    line(`Invoice Number: ${share.invoiceNumber || "-"}`, 112);
+    line(`Invoice No: ${share.invoiceNumber || "-"}`, 112);
     line(`Value: ${share.value || "-"}`, 112);
     y = Math.max(afterTaskInfoY, y) + 2;
     if (share.includeInstructions) {
       sectionTitle("Instructions");
       line(task.instructions || "-");
-    }
-    if (share.includeGps) {
-      sectionTitle("GPS");
-      const gpsMeta = buildGpsMeta(task);
-      if (gpsMeta.url) {
-        link(`GPS: ${gpsMeta.text}`, gpsMeta.url);
-      } else {
-        line("GPS: -");
-      }
     }
     if (share.includeRollbackReason) {
       sectionTitle("Rollback Reason");
@@ -902,6 +912,7 @@
     }
     if (remoteState?.ok && remoteState.state) {
       applyRemoteState(remoteState.state);
+      await syncEngineerOptionsFromCredentialSheet({ rerender: true });
       if (!silent) app.showSyncStatus("Latest updates synced on this device.", "success");
     } else if (!silent && !remoteState) {
       app.showSyncStatus("Unable to reach Google right now. Cached data is still available.", "error");
@@ -1062,6 +1073,7 @@
   async function runPostLoginRefresh(options = {}) {
     const { silent = false } = options;
     await autofillMasterSettings();
+    await syncEngineerOptionsFromCredentialSheet();
     refreshAll();
     await syncFromGoogleState({ silent });
     if (masterSession) startCrossDeviceSync();
@@ -1304,6 +1316,7 @@
       if (!state.options.districts.length) state.options.districts = ["Bengaluru Urban"];
     }
     assignDate.value = new Date().toISOString().split("T")[0];
+    await syncEngineerOptionsFromCredentialSheet();
     refreshAll();
     if (masterSession) {
       const isValid = await validateActiveSession({ silent: true });

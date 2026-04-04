@@ -87,7 +87,7 @@
           <article class="panel">
             <form id="task-assignment-form" class="form-grid">
               <label class="full-span"><span>Saved Draft</span><select id="draftSelector" name="draftId" required></select></label>
-              <div id="assignment-empty-state" class="empty-state">Select Draft to create Site ID task.</div>
+              <div id="assignment-empty-state" class="empty-state"></div>
               <div id="assignment-fields" class="form-grid full-span hidden">
                 <div class="full-span frozen-block">
                   <div id="frozen-summary" class="chip-row"></div>
@@ -107,7 +107,18 @@
               </div>
             </form>
           </article>
-          <article class="panel"><div id="queue-list" class="stack-list"></div></article>
+          <article class="panel">
+            <div class="responsive-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Serial No</th><th>Site ID</th><th>Engineer</th><th>District</th><th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="queue-list"></tbody>
+              </table>
+            </div>
+          </article>
         </div>
       </section>
 

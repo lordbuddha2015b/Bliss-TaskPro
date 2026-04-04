@@ -276,7 +276,8 @@
       || /\.(png|jpe?g|gif|bmp|webp|svg)$/.test(fileName);
   }
 
-  async function renderTaskDetail(taskId, documentAnswerOverride) {
+  async function renderTaskDetail(taskId, documentAnswerOverride, options = {}) {
+    const { skipRemote = false } = options;
     let task = getEngineerTasks().find((item) => item.id === taskId);
     const host = document.getElementById("engineer-task-detail");
     if (!task) {
@@ -284,7 +285,7 @@
       return;
     }
     const uploadState = getUploadState(task.id);
-    if (!uploadState.busy) {
+    if (!uploadState.busy && !skipRemote) {
       host.innerHTML = app.emptyMarkup("Loading Site ID details...");
       const remoteTask = await app.fetchGoogleTask(state.settings.engineer, task.siteId, engineerSession);
       if (remoteTask?.sessionExpired) {
@@ -298,7 +299,7 @@
     const canEdit = task.status === "WIP";
     const canStartWip = task.status === "Pending";
     const isUploading = !!uploadState.busy;
-    const disableActions = isUploading || isCompleted;
+    const disableActions = isCompleted;
     const gpsMeta = buildGpsMeta(task);
     const sectionProgress = (section) => uploadState.section === section && uploadState.progressText
       ? `<p class="fine-print">${app.escapeHtml(uploadState.progressText)}</p>`
@@ -337,12 +338,13 @@
           <h5>Site Engineer Name</h5>
           <label><span>Name</span><input id="siteEngineerName" type="text" value="${app.escapeHtml(task.siteEngineerName || "")}" ${disableActions ? "disabled" : ""}></label>
           <p class="fine-print">${isCompleted ? "Completed task is frozen." : "Required before marking WIP."}</p>
+          ${canStartWip ? `<div class="action-row"><button id="mark-wip" class="secondary-button" type="button">WIP</button></div>` : ""}
         </section>
 
         <section class="update-box">
-          <h5>Document Available</h5>
+          <h5>Document</h5>
           <div class="form-grid">
-            <label><span>Document Available</span>
+            <label><span>Available</span>
               <select id="documentAnswer" ${!canEdit || disableActions ? "disabled" : ""}>
                 <option value="No" ${documentAnswer === "No" ? "selected" : ""}>No</option>
                 <option value="Yes" ${documentAnswer === "Yes" ? "selected" : ""}>Yes</option>
@@ -350,18 +352,18 @@
             </label>
             ${showDocumentFields ? `
               <label><span>Document Type</span>
-                <select id="documentType" ${isUploading ? "disabled" : ""}>
+                <select id="documentType">
                   <option value="DN">DN</option>
                   <option value="ESCOMDocuments">ESCOMDocuments</option>
                   <option value="Receipt">Receipt</option>
                   <option value="Electrical Inspectrate">Electrical Inspectrate</option>
                 </select>
               </label>
-              <label class="full-span" id="document-upload-wrap"><span>Upload Document</span><input id="documentUpload" type="file" ${isUploading ? "disabled" : ""}></label>
+              <label class="full-span" id="document-upload-wrap"><span>Upload Document</span><input id="documentUpload" type="file"></label>
             ` : ""}
           </div>
           <div class="action-row">
-            ${showDocumentFields ? `<button id="add-document" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>Add Document</button>` : ''}
+            ${showDocumentFields ? `<button id="add-document" class="secondary-button" type="button">Add Document</button>` : ''}
           </div>
           ${sectionMessage("document")}
           ${sectionProgress("document")}
@@ -374,7 +376,7 @@
             <label><span>Select Photos</span><input id="photoUpload" type="file" accept="image/*" multiple ${!canEdit || disableActions ? "disabled" : ""}></label>
           </div>
           <div class="action-row">
-            ${canEdit && !isCompleted ? `<button id="add-photos" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>Save Photos</button>` : ''}
+            ${canEdit && !isCompleted ? `<button id="add-photos" class="secondary-button" type="button">Save Photos</button>` : ''}
           </div>
           ${sectionMessage("photo")}
           ${sectionProgress("photo")}
@@ -388,41 +390,26 @@
             <label><span>Measurement Image</span><input id="measurementUpload" type="file" accept="image/*" multiple ${!canEdit || disableActions ? "disabled" : ""}></label>
           </div>
           <div class="action-row">
-            ${canEdit && !isCompleted ? `<button id="save-measurement" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>Save Measurement</button>` : ''}
+            ${canEdit && !isCompleted ? `<button id="save-measurement" class="secondary-button" type="button">Save Measurement</button>` : ''}
           </div>
           ${sectionMessage("measurement")}
           ${sectionProgress("measurement")}
           <ul class="file-list">${fileListMarkup(task.measurementImages, "measurement", canEdit && !isCompleted, isUploading)}</ul>
         </section>
 
-        <section class="update-box">
-          <h5>Location Capture</h5>
-          <div class="action-row">
-            ${canEdit && !isCompleted ? `<button id="capture-gps" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>Capture GPS Location</button><button id="pick-gps-map" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>Open Map And Select</button><button id="clear-gps" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>Clear Location</button>` : ''}
-          </div>
-          <div class="form-grid">
-            <label class="full-span"><span>GPS</span><input id="completionGps" type="text" readonly value="${app.escapeHtml(gpsMeta.text)}"></label>
-            <label><span>District</span><input id="completionDistrict" type="text" readonly value="${app.escapeHtml(task.district || "-")}"></label>
-          </div>
-          ${gpsMeta.url ? `<p class="fine-print"><a href="${gpsMeta.url}" target="_blank" rel="noopener noreferrer">Open GPS in Google Maps</a></p>` : ""}
-        </section>
-
         <div class="action-row">
-          ${canEdit && !isCompleted ? `<button id="mark-completed" class="primary-button" type="button" ${isUploading ? "disabled" : ""}>Complete</button>` : ''}
+          ${canEdit && !isCompleted ? `<button id="mark-completed" class="primary-button" type="button">Complete</button>` : ''}
         </div>
       </div>
     `;
 
     if (canEdit && !isCompleted) {
       document.getElementById("documentAnswer").addEventListener("change", (event) => {
-        renderTaskDetail(task.id, event.target.value);
+        renderTaskDetail(task.id, event.target.value, { skipRemote: true });
       });
       document.getElementById("add-document")?.addEventListener("click", () => addDocument(task.id));
       document.getElementById("add-photos")?.addEventListener("click", () => addPhotos(task.id));
       document.getElementById("save-measurement")?.addEventListener("click", () => saveMeasurement(task.id));
-      document.getElementById("capture-gps")?.addEventListener("click", () => captureGps(task.id));
-      document.getElementById("pick-gps-map")?.addEventListener("click", () => openMap(task.id));
-      document.getElementById("clear-gps")?.addEventListener("click", () => clearGps(task.id));
       document.getElementById("mark-completed")?.addEventListener("click", () => markCompleted(task.id));
       document.getElementById("siteEngineerName")?.addEventListener("change", () => scheduleLiveTaskUpdate(task.id));
       document.getElementById("measurementText")?.addEventListener("change", () => scheduleLiveTaskUpdate(task.id));
@@ -492,7 +479,7 @@
 
   function scheduleLiveTaskUpdate(taskId) {
     const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
-    if (!task || task.status !== "WIP" || isUploadBusy(taskId)) return;
+    if (!task || task.status !== "WIP") return;
     clearTimeout(liveSaveTimer);
     liveSaveTimer = setTimeout(() => {
       updateTask(taskId, (taskItem) => {
@@ -506,7 +493,6 @@
   }
 
   function markWip(taskId) {
-    if (isUploadBusy(taskId)) return;
     const siteEngineerName = collectSiteEngineerName();
     if (!siteEngineerName) {
       window.alert("Please fill Site Engineer Name before starting WIP.");
@@ -521,17 +507,24 @@
   }
 
   function markCompleted(taskId) {
-    if (isUploadBusy(taskId)) return;
     const siteEngineerName = collectSiteEngineerName();
     const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
     if (!task) return;
+    const hasGps = !!(task.gps || (task.latitude && task.longitude));
     const hasMeasurement = !!task.measurementText || !!task.measurementImages.length;
-    if (!siteEngineerName || !task.gps || !task.photos.length || !hasMeasurement) {
+    if (!siteEngineerName || !hasGps || !task.photos.length || !hasMeasurement) {
       window.alert("Please add Site Engineer Name, at least one photo, GPS, and either measurement text or measurement image before completion.");
       return;
     }
     updateTask(taskId, (current) => {
       current.siteEngineerName = siteEngineerName;
+      if (!current.gps && current.latitude && current.longitude) {
+        current.gps = {
+          latitude: current.latitude,
+          longitude: current.longitude,
+          source: "master"
+        };
+      }
       current.status = "Completed";
       current.id = app.toLifecycleTaskId(current.id || current.baseTaskId || current.draftId, "Completed");
       current.baseTaskId = app.extractTaskBaseId(current.id);
@@ -603,7 +596,6 @@
         if (!activeTask) break;
         applyFile(activeTask, items[index]);
         app.writeState(state);
-        renderSiteList();
         const result = await persistQueuedFile(taskId, section === "document" ? "addDocumentYes" : section === "photo" ? "addPhotos" : "saveMeasurement");
         if (result?.ok) {
           uploaded = true;
@@ -617,7 +609,6 @@
           taskItem.siteEngineerName = originalSiteEngineerName;
         });
         app.writeState(state);
-        renderSiteList();
         if (attempt < 2) {
           setUploadState(taskId, {
             busy: true,
@@ -695,6 +686,72 @@
     });
   }
 
+  function readImageFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function dataUrlToFile(dataUrl, fileName) {
+    const [meta, base64] = String(dataUrl || "").split(",");
+    const mimeMatch = /data:(.*?);base64/.exec(meta || "");
+    const mimeType = mimeMatch?.[1] || "image/jpeg";
+    const binary = atob(base64 || "");
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return new File([bytes], fileName, { type: mimeType });
+  }
+
+  function loadImage(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = dataUrl;
+    });
+  }
+
+  async function compressImageFileIfNeeded(file) {
+    const maxBytes = 2.5 * 1024 * 1024;
+    if (!file || !String(file.type || "").startsWith("image/") || file.size <= maxBytes) return file;
+    const sourceDataUrl = await readImageFile(file);
+    const image = await loadImage(sourceDataUrl);
+    let width = image.width;
+    let height = image.height;
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      canvas.width = Math.max(1, Math.round(width));
+      canvas.height = Math.max(1, Math.round(height));
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.7);
+      const compressedFile = dataUrlToFile(compressedDataUrl, file.name.replace(/\.[^.]+$/, "") + ".jpg");
+      if (compressedFile.size <= maxBytes || attempt === 3) {
+        return compressedFile.size < file.size ? compressedFile : file;
+      }
+      width *= 0.85;
+      height *= 0.85;
+    }
+    return file;
+  }
+
+  async function prepareUploadFiles(files, options = {}) {
+    const { compressImages = false } = options;
+    const prepared = [];
+    for (const file of Array.from(files || [])) {
+      prepared.push(compressImages ? await compressImageFileIfNeeded(file) : file);
+    }
+    return prepared;
+  }
+
   async function addPhotos(taskId) {
     if (isUploadBusy(taskId)) return;
     const files = Array.from(document.getElementById("photoUpload").files || []);
@@ -704,8 +761,9 @@
     }
     const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
     const coords = await getCurrentCoords();
+    const preparedFiles = await prepareUploadFiles(files, { compressImages: true });
     const enrichedFiles = [];
-    for (const rawFile of files) {
+    for (const rawFile of preparedFiles) {
       const [enriched] = await app.enrichFilesWithContent(task.siteId, [rawFile], coords || {});
       enriched.storedName = coords
         ? `${task.siteId}_${coords.latitude}_${coords.longitude}_${enriched.originalName}`
@@ -733,8 +791,9 @@
       return;
     }
     const task = state.tasks.find((item) => item.id === taskId && item.engineer === currentEngineer);
+    const preparedFiles = await prepareUploadFiles(Array.from(measurementFiles), { compressImages: true });
     const enrichedFiles = [];
-    for (const rawFile of Array.from(measurementFiles)) {
+    for (const rawFile of preparedFiles) {
       const [enriched] = await app.enrichFilesWithContent(task.siteId, [rawFile], {});
       enrichedFiles.push(enriched);
     }

@@ -4,6 +4,8 @@
   const ENGINEER_SETTINGS_KEY = "bliss-taskpro-engineer-settings";
   const MASTER_SESSION_KEY = "bliss-taskpro-master-session";
   const ENGINEER_SESSION_KEY = "bliss-taskpro-engineer-session";
+  const CREDENTIAL_SHEET_ID = "1RuV_gocgi-DwFpN8uQqwE-MWiwHvXBg1-Ly0gL-ZbEk";
+  const ENGINEER_CREDENTIAL_SHEET_NAME = "Engineer_Credential";
 
   const defaults = {
     options: {
@@ -445,6 +447,47 @@
     };
   }
 
+  function parseGoogleVisualizationJson(text) {
+    const raw = String(text || "").trim();
+    if (!raw) return null;
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start === -1 || end === -1 || end <= start) return null;
+    try {
+      return JSON.parse(raw.slice(start, end + 1));
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async function fetchEngineerOptionsFromCredentialSheet() {
+    const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(CREDENTIAL_SHEET_ID)}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(ENGINEER_CREDENTIAL_SHEET_NAME)}`;
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Accept: "text/plain"
+        }
+      });
+      const text = await response.text();
+      const data = parseGoogleVisualizationJson(text);
+      const cols = data?.table?.cols || [];
+      const rows = data?.table?.rows || [];
+      const displayNameIndex = cols.findIndex((col) => String(col?.label || "").trim().toLowerCase() === "display name");
+      if (displayNameIndex === -1) return [];
+      const seen = new Set();
+      return rows
+        .map((row) => row?.c?.[displayNameIndex]?.v)
+        .map((value) => String(value || "").trim())
+        .filter((value) => {
+          if (!value || seen.has(value)) return false;
+          seen.add(value);
+          return true;
+        });
+    } catch (error) {
+      return [];
+    }
+  }
+
   function normalizeSettings(input, fallback) {
     const base = JSON.parse(JSON.stringify(fallback));
     if (!input) return base;
@@ -606,6 +649,7 @@
     reverseGeocodeDistrict,
     loginWithGoogle,
     fetchGoogleConfig,
+    fetchEngineerOptionsFromCredentialSheet,
     formatLoginFailure,
     validateGoogleSession,
     mergeGoogleSettings,
