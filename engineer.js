@@ -50,7 +50,7 @@
   function applyRemoteState(remoteState) {
     if (!remoteState) return;
     const activeFormSnapshot = captureActiveFormState();
-    state.options = { ...state.options, ...(remoteState.options || {}) };
+    state.options = app.mergeRemoteOptions(state.options, remoteState.options || {});
     if (Array.isArray(remoteState.tasks)) {
       if (activeTaskId) {
         const localActiveTask = state.tasks.find((task) => task.id === activeTaskId);
@@ -151,6 +151,15 @@
     return uploadStateByTaskId[taskId] || { busy: false, section: "", message: "", progressText: "" };
   }
 
+  function rerenderActiveTaskDetail(taskId) {
+    if (activeTaskId !== taskId) return;
+    const snapshot = captureActiveFormState();
+    const documentAnswer = snapshot?.documentAnswer || document.getElementById("documentAnswer")?.value;
+    renderTaskDetail(taskId, documentAnswer, { skipRemote: true }).then(() => {
+      applyActiveFormState(snapshot);
+    }).catch(() => {});
+  }
+
   function setUploadState(taskId, nextState) {
     uploadStateByTaskId = {
       ...uploadStateByTaskId,
@@ -159,14 +168,14 @@
         ...nextState
       }
     };
-    if (activeTaskId === taskId) renderTaskDetail(taskId);
+    rerenderActiveTaskDetail(taskId);
   }
 
   function clearUploadState(taskId) {
     if (!uploadStateByTaskId[taskId]) return;
     uploadStateByTaskId = { ...uploadStateByTaskId };
     delete uploadStateByTaskId[taskId];
-    if (activeTaskId === taskId) renderTaskDetail(taskId);
+    rerenderActiveTaskDetail(taskId);
   }
 
   function isUploadBusy(taskId = activeTaskId) {
@@ -245,6 +254,14 @@
 
   function fileListMarkup(items, removeAction, editable, disabled = false) {
     if (!items.length) return "<li>No files added.</li>";
+    if (removeAction === "document") {
+      return items.map((item, index) => `
+        <li class="file-row-item">
+          <span class="preview-name">${app.escapeHtml(item.storedName || item.name || `File ${index + 1}`)}</span>
+          ${editable ? `<button class="mini-button" type="button" data-remove="${removeAction}" data-file-id="${item.id}" ${disabled ? "disabled" : ""}>Remove</button>` : ""}
+        </li>
+      `).join("");
+    }
     return items.map((item, index) => `
       <li class="file-card-item">
         <div class="preview-card">
@@ -329,7 +346,6 @@
         </div>
 
         <div class="action-row action-row-top">
-          ${canStartWip ? `<button id="mark-wip" class="secondary-button" type="button" ${isUploading ? "disabled" : ""}>WIP</button>` : ''}
           <span class="status-pill ${app.statusClass(task.status)}">${task.status}</span>
         </div>
         ${isUploading ? `<div class="update-box"><p class="fine-print">${app.escapeHtml(uploadState.message || "Uploading files...")}</p><p class="fine-print">${app.escapeHtml(uploadState.progressText || "Saving to Google Drive...")}</p></div>` : ""}
@@ -627,7 +643,8 @@
     }
     clearUploadState(taskId);
     app.showSyncStatus("Saved to Google Sheet and Drive successfully.", "success");
-    renderSiteList();
+    renderStats(getEngineerTasks());
+    rerenderActiveTaskDetail(taskId);
     return true;
   }
 

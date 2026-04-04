@@ -405,6 +405,11 @@ textarea {
   transform: none !important;
 }
 
+.task-page .status-static-button {
+  pointer-events: none;
+  cursor: default;
+}
+
 .frozen-block {
   display: grid;
   gap: 12px;
@@ -576,6 +581,14 @@ tbody td:not(:last-child)::after {
   margin: 0;
   padding-left: 18px;
   color: var(--muted);
+}
+
+.file-row-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
 }
 
 .photo-preview-grid {

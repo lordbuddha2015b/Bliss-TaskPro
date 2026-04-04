@@ -112,6 +112,17 @@ function getLatestAppState_(params) {
   };
 }
 
+function getCredentialEngineerNames_() {
+  const sheet = getCredentialSpreadsheet_().getSheetByName(SHEET_NAMES.engineerCredential);
+  if (!sheet) return [];
+  ensureHeaders_(sheet, USER_HEADERS);
+  const values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return [];
+  return dedupeNonEmpty_(values.slice(1).map(function(row) {
+    return row[3];
+  }));
+}
+
 function readAllSiteTasks_() {
   const rootFolder = getRootSiteFolder_();
   const folders = rootFolder.getFolders();
@@ -396,7 +407,7 @@ function siteTaskToLatestRow_(task) {
 function buildLatestOptions_(tasks) {
   return {
     clients: dedupeNonEmpty_(['JIO', 'Retail', 'Others'].concat((tasks || []).map(function(task) { return task.client; }))),
-    engineers: dedupeNonEmpty_(['Naveen', 'Rocky', 'Sriram'].concat((tasks || []).map(function(task) { return task.engineer; }))),
+    engineers: dedupeNonEmpty_(['Naveen', 'Rocky', 'Sriram'].concat(getCredentialEngineerNames_()).concat((tasks || []).map(function(task) { return task.engineer; }))),
     categories: dedupeNonEmpty_(['Project', 'O&M', 'Others'].concat((tasks || []).map(function(task) { return task.category; }))),
     activities: dedupeNonEmpty_(['Enod B', '5G', 'Upgradation', 'Repair', 'Others'].concat((tasks || []).map(function(task) { return task.activity; }))),
     districts: dedupeNonEmpty_((tasks || []).map(function(task) { return task.district; }))

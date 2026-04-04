@@ -18,6 +18,7 @@ Bliss TaskPro includes a Master web app and an Engineer web app for draft creati
 - Auto Sync toggle for Master and Engineer with manual sync fallback
 - Sequential file upload queue with retry and progress feedback
 - Master engineer dropdown refresh from the credential sheet with duplicate-safe merging
+- Engineer dropdown options now come from the Apps Script state response, which reads `Display Name` values from the `Engineer_Credential` sheet.
 - Century Gothic based UI styling across Master and Engineer pages
 - Master and Engineer task tables with serial numbering and status actions at the end
 - Manual latitude and longitude entry in Master task assignment with automatic district lookup
@@ -116,9 +117,11 @@ Each Site ID gets its own Google Sheet named `SiteID_DataSheet`.
 - Engineer auto sync now preserves the active WIP form while refreshing task list and status changes.
 - Active Engineer upload sessions lock action buttons, show progress text, and upload files one-by-one with automatic retries.
 - Engineer uploads now compress large site photos and measurement images before upload and keep the form usable while the background queue runs.
+- Engineer upload success now refreshes only the local file list/detail view instead of forcing a full form reset.
 - Master assigned-task view now uses the same lightweight table style as Task Details.
 - Master draft selector now shows a soft glow when drafts are waiting for Site ID assignment.
 - PDF export now shows a single `GPS` line under Location and uses `Invoice No:` in the billing block.
+- Master Task page status buttons are display-only; status changes remain available only from the Task Details modal.
 - Engineer task detail now keeps Document dropdown changes local without forcing a remote reload, and the WIP action sits directly below Site Engineer Name.
 - Master header and Engineer header now place workspace title and logged-in credential text on the top-right, with Logout moved into the top action area.
 - Master task assignment now supports manual latitude/longitude entry and auto-fills district from reverse geocoding while still keeping the GPS/map helpers.

@@ -118,6 +118,10 @@
     };
   }
 
+  function mergeRemoteOptions(currentOptions, remoteOptions) {
+    return normalizeOptions({ ...(currentOptions || {}), ...(remoteOptions || {}) }, cloneDefaults().options);
+  }
+
   function mergeOptionList(baseList, nextList) {
     const seen = new Set();
     return [...(Array.isArray(baseList) ? baseList : []), ...(Array.isArray(nextList) ? nextList : [])]
@@ -653,6 +657,7 @@
     formatLoginFailure,
     validateGoogleSession,
     mergeGoogleSettings,
+    mergeRemoteOptions,
     showSyncStatus,
     hideSyncStatus,
     saveMasterSession,

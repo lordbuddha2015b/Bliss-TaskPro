@@ -58,7 +58,7 @@
 
   function applyRemoteState(remoteState) {
     if (!remoteState) return;
-    state.options = { ...state.options, ...(remoteState.options || {}) };
+    state.options = app.mergeRemoteOptions(state.options, remoteState.options || {});
     if (Array.isArray(remoteState.tasks)) {
       if (currentOpenTaskId) {
         const localOpenTask = state.tasks.find((task) => task.id === currentOpenTaskId);
@@ -140,20 +140,6 @@
     if (!value || state.options[key].includes(value)) return;
     state.options[key].push(value);
     state.options[key].sort((a, b) => a.localeCompare(b));
-  }
-
-  async function syncEngineerOptionsFromCredentialSheet(options = {}) {
-    const { rerender = false } = options;
-    const remoteEngineers = await app.fetchEngineerOptionsFromCredentialSheet();
-    if (!remoteEngineers.length) return;
-    const nextEngineers = Array.from(new Set([...(state.options.engineers || []), ...remoteEngineers]))
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b));
-    const changed = JSON.stringify(nextEngineers) !== JSON.stringify(state.options.engineers || []);
-    if (!changed) return;
-    state.options.engineers = nextEngineers;
-    app.writeState(state);
-    if (rerender) refreshAll();
   }
 
   function renderStats() {
@@ -479,9 +465,18 @@
     y += 18;
     sectionTitle("Task Info");
     const infoStartY = y;
+    const gpsMeta = buildGpsMeta(task);
     line(`Date: ${app.formatDate(task.date)}`);
     line(`Location: ${task.location}`);
-    line(`GPS: ${share.includeGps ? buildGpsMeta(task).text : "-"}`);
+    if (share.includeGps && gpsMeta.url) {
+      ensureSpace(12);
+      const startY = y;
+      pdf.setTextColor(0, 0, 0);
+      pdf.textWithLink(`GPS: ${gpsMeta.text}`, 16, y, { url: gpsMeta.url });
+      y = startY + 7;
+    } else {
+      line(`GPS: ${share.includeGps ? gpsMeta.text : "-"}`);
+    }
     line(`District: ${task.district || "-"}`);
     const afterTaskInfoY = y;
     y = infoStartY;
@@ -514,22 +509,24 @@
     addLinksBlock("Photos Google Drive Link", exportPhotos);
     const pdfDataUri = pdf.output("datauristring");
     const pdfBase64 = String(pdfDataUri).split(",")[1] || "";
+    let driveSaveResult = null;
     if (saveDriveCopy && pdfBase64 && masterSession) {
-      app.showSyncStatus("Saving PDF copy to Site ID Drive folder...", "working", true);
-      const reportResult = await app.savePdfToDrive(state.settings.master, masterSession, {
+      driveSaveResult = await app.savePdfToDrive(state.settings.master, masterSession, {
         siteId: task.siteId,
         fileName: `${task.siteId}_summary.pdf`,
         mimeType: "application/pdf",
         pdfBase64
       });
-      if (reportResult?.ok) {
-        app.showSyncStatus("PDF downloaded and saved in Site ID Reports folder.", "success");
-      } else {
-        app.showSyncStatus(reportResult?.message || "PDF downloaded, but Drive save failed.", "error");
-      }
     }
     if (download) {
       pdf.save(`${task.siteId}_summary.pdf`);
+    }
+    if (driveSaveResult?.ok || (!saveDriveCopy && download)) {
+      app.showSyncStatus(saveDriveCopy ? "PDF downloaded and saved in Site ID Reports folder." : "PDF exported successfully.", "success");
+    } else if (saveDriveCopy && driveSaveResult && !driveSaveResult.ok) {
+      app.showSyncStatus(driveSaveResult.message || "PDF downloaded, but Drive save failed.", "error");
+    } else {
+      app.hideSyncStatus();
     }
     return { pdfBase64 };
   }
@@ -912,7 +909,6 @@
     }
     if (remoteState?.ok && remoteState.state) {
       applyRemoteState(remoteState.state);
-      await syncEngineerOptionsFromCredentialSheet({ rerender: true });
       if (!silent) app.showSyncStatus("Latest updates synced on this device.", "success");
     } else if (!silent && !remoteState) {
       app.showSyncStatus("Unable to reach Google right now. Cached data is still available.", "error");
@@ -1073,7 +1069,6 @@
   async function runPostLoginRefresh(options = {}) {
     const { silent = false } = options;
     await autofillMasterSettings();
-    await syncEngineerOptionsFromCredentialSheet();
     refreshAll();
     await syncFromGoogleState({ silent });
     if (masterSession) startCrossDeviceSync();
@@ -1316,7 +1311,6 @@
       if (!state.options.districts.length) state.options.districts = ["Bengaluru Urban"];
     }
     assignDate.value = new Date().toISOString().split("T")[0];
-    await syncEngineerOptionsFromCredentialSheet();
     refreshAll();
     if (masterSession) {
       const isValid = await validateActiveSession({ silent: true });
