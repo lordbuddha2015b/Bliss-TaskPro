@@ -198,8 +198,9 @@
 
   function renderStats(tasks) {
     document.getElementById("engineer-total-tasks").textContent = tasks.length;
-    document.getElementById("engineer-wip-tasks").textContent = app.countByStatus(tasks, "WIP");
     document.getElementById("engineer-completed-tasks").textContent = app.countByStatus(tasks, "Completed");
+    document.getElementById("engineer-wip-tasks").textContent = app.countByStatus(tasks, "WIP");
+    document.getElementById("engineer-pending-tasks").textContent = app.countByStatus(tasks, "Pending");
   }
 
   function renderSiteList() {
@@ -280,8 +281,10 @@
     return items.map((item) => `
       <div class="preview-card">
         ${item.previewUrl || item.thumbnailUrl ? `<img class="photo-preview" src="${item.previewUrl || item.thumbnailUrl}" alt="${app.escapeHtml(item.storedName)}">` : `<span class="frozen-chip">${app.escapeHtml(item.storedName)}</span>`}
-        <span class="preview-name">${app.escapeHtml(item.storedName || item.name || "Photo")}</span>
-        ${editable ? `<button class="mini-button" type="button" data-remove="${removeAction}" data-file-id="${item.id}" ${disabled ? "disabled" : ""}>Remove</button>` : ""}
+        <div class="file-row-item">
+          <span class="preview-name">${app.escapeHtml(item.storedName || item.name || "Photo")}</span>
+          ${editable ? `<button class="mini-button" type="button" data-remove="${removeAction}" data-file-id="${item.id}" ${disabled ? "disabled" : ""}>Remove</button>` : ""}
+        </div>
       </div>
     `).join("");
   }

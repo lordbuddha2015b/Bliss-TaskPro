@@ -142,11 +142,50 @@
     state.options[key].sort((a, b) => a.localeCompare(b));
   }
 
+  function getHiddenTaskIdsFromDrafts() {
+    return new Set(
+      (state.drafts || [])
+        .filter((draft) => draft.editable && draft.sourceTaskId)
+        .map((draft) => draft.sourceTaskId)
+    );
+  }
+
+  function getVisibleTasks() {
+    const hiddenTaskIds = getHiddenTaskIdsFromDrafts();
+    return state.tasks.filter((task) => !hiddenTaskIds.has(task.id));
+  }
+
+  function prefillAssignmentFromTask(task) {
+    if (!task) return;
+    currentEditTaskId = task.id;
+    assignSiteId.value = task.siteId || "";
+    assignDate.value = task.date || new Date().toISOString().split("T")[0];
+    assignLocation.value = task.location || "";
+    assignLatitude.value = task.latitude || "";
+    assignLongitude.value = task.longitude || "";
+    districtSelect.value = task.district || "";
+    assignInstructions.value = task.instructions || "";
+    assignmentForm.querySelector('button[type="submit"]').textContent = "Update Task";
+  }
+
+  function resetAssignmentFieldsOnly() {
+    assignSiteId.value = "";
+    assignDate.value = new Date().toISOString().split("T")[0];
+    assignLocation.value = "";
+    assignLatitude.value = "";
+    assignLongitude.value = "";
+    districtSelect.value = "";
+    assignInstructions.value = "";
+    currentEditTaskId = "";
+    assignmentForm.querySelector('button[type="submit"]').textContent = "Assign Task";
+  }
+
   function renderStats() {
-    document.getElementById("master-total-tasks").textContent = state.tasks.length;
-    document.getElementById("master-pending-tasks").textContent = app.countByStatus(state.tasks, "Pending");
-    document.getElementById("master-wip-tasks").textContent = app.countByStatus(state.tasks, "WIP");
-    document.getElementById("master-completed-tasks").textContent = app.countByStatus(state.tasks, "Completed");
+    const visibleTasks = getVisibleTasks();
+    document.getElementById("master-total-tasks").textContent = visibleTasks.length;
+    document.getElementById("master-pending-tasks").textContent = app.countByStatus(visibleTasks, "Pending");
+    document.getElementById("master-wip-tasks").textContent = app.countByStatus(visibleTasks, "WIP");
+    document.getElementById("master-completed-tasks").textContent = app.countByStatus(visibleTasks, "Completed");
   }
 
   function renderDrafts() {
@@ -161,6 +200,7 @@
       <article class="stack-card">
         <h5>${app.escapeHtml(draft.client)} | ${app.escapeHtml(draft.engineer)}</h5>
         <p class="meta-line">${app.escapeHtml(draft.category)} | ${app.escapeHtml(draft.activity)}</p>
+        ${draft.editable ? '<p class="fine-print">Editable draft</p>' : ""}
         <div class="action-row">
           <button class="secondary-button" type="button" data-edit-draft="${draft.id}">Edit Draft</button>
           <button class="secondary-button" type="button" data-delete-draft="${draft.id}">Delete Draft</button>
@@ -177,7 +217,7 @@
   }
 
   function getAvailableDrafts() {
-    return state.drafts.filter((draft) => !state.tasks.some((task) => task.draftId === draft.id && task.id !== currentEditTaskId));
+    return state.drafts.filter((draft) => !state.tasks.some((task) => task.draftId === draft.id && task.id !== currentEditTaskId && !draft.sourceTaskId));
   }
 
   function renderDraftSelector() {
@@ -205,12 +245,23 @@
     const draft = state.drafts.find((item) => item.id === draftSelector.value);
     if (!draft) {
       host.innerHTML = "";
+      currentEditTaskId = "";
       toggleAssignmentVisibility(false);
       return;
     }
 
     selectedDraftId = draft.id;
     toggleAssignmentVisibility(true);
+    if (draft.sourceTaskId) {
+      const sourceTask = state.tasks.find((item) => item.id === draft.sourceTaskId);
+      if (sourceTask) {
+        prefillAssignmentFromTask(sourceTask);
+      } else {
+        resetAssignmentFieldsOnly();
+      }
+    } else {
+      resetAssignmentFieldsOnly();
+    }
     host.innerHTML = `
       <span class="frozen-chip">Client: ${app.escapeHtml(draft.client)}</span>
       <span class="frozen-chip">Engineer: ${app.escapeHtml(draft.engineer)}</span>
@@ -257,12 +308,13 @@
 
   function renderQueue() {
     const host = document.getElementById("queue-list");
-    if (!state.tasks.length) {
+    const visibleTasks = getVisibleTasks();
+    if (!visibleTasks.length) {
       host.innerHTML = '<tr><td colspan="5"><div class="empty-state">No task assigned.</div></td></tr>';
       return;
     }
 
-    host.innerHTML = state.tasks.slice().reverse().map((task, index) => `
+    host.innerHTML = visibleTasks.slice().reverse().map((task, index) => `
       <tr>
         <td>${index + 1}</td>
         <td><button class="site-link-button" type="button" data-open-task="${task.id}">${app.escapeHtml(task.siteId)}</button></td>
@@ -288,12 +340,13 @@
 
   function renderTaskTable() {
     const host = document.getElementById("master-task-table");
-    if (!state.tasks.length) {
+    const visibleTasks = getVisibleTasks();
+    if (!visibleTasks.length) {
       host.innerHTML = '<tr><td colspan="8"><div class="empty-state">No task data yet.</div></td></tr>';
       return;
     }
 
-    host.innerHTML = state.tasks.slice().reverse().map((task, index) => `
+    host.innerHTML = visibleTasks.slice().reverse().map((task, index) => `
       <tr>
         <td>${index + 1}</td>
         <td><button class="site-link-button" data-open-task="${task.id}">${app.escapeHtml(task.siteId)}</button></td>
@@ -346,6 +399,29 @@
     }
   }
 
+  async function optimizePdfImage(dataUrl, options = {}) {
+    const { quality = 0.6, maxWidth = 1200 } = options;
+    if (!dataUrl) return "";
+    return await new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => {
+        const scale = image.width > maxWidth ? maxWidth / image.width : 1;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) {
+          resolve(dataUrl);
+          return;
+        }
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      image.onerror = () => resolve(dataUrl);
+      image.src = dataUrl;
+    });
+  }
+
   async function exportTaskPdf(task, share, remote = null, options = {}) {
     const { download = true, saveDriveCopy = true } = options;
     const jsPDF = window.jspdf?.jsPDF;
@@ -364,7 +440,7 @@
 
     const pageWidth = pdf.internal.pageSize.getWidth();
 
-    const watermarkData = await toDataUrl("./New Logo.png");
+    const watermarkData = await optimizePdfImage(await toDataUrl("./New Logo.png"), { quality: 0.6, maxWidth: 1200 });
 
     function drawWatermark() {
       if (!watermarkData) return;
@@ -372,7 +448,7 @@
         if (typeof pdf.GState === "function" && typeof pdf.setGState === "function") {
           pdf.setGState(new pdf.GState({ opacity: 0.08 }));
         }
-        pdf.addImage(watermarkData, "PNG", pageWidth / 2 - 45, 95, 90, 90);
+        pdf.addImage(watermarkData, "JPEG", pageWidth / 2 - 45, 95, 90, 90);
         if (typeof pdf.GState === "function" && typeof pdf.setGState === "function") {
           pdf.setGState(new pdf.GState({ opacity: 1 }));
         }
@@ -854,15 +930,11 @@
 
   function resetAssignmentForm() {
     assignmentForm.reset();
-    assignDate.value = new Date().toISOString().split("T")[0];
-    assignLatitude.value = "";
-    assignLongitude.value = "";
-    currentEditTaskId = "";
+    resetAssignmentFieldsOnly();
     selectedDraftId = "";
     draftSelector.value = "";
     renderFrozenSummary();
     toggleAssignmentVisibility(false);
-    assignmentForm.querySelector('button[type="submit"]').textContent = "Assign Task";
   }
 
   function resetDraftForm() {
@@ -1013,20 +1085,30 @@
   function loadTaskForEdit(taskId) {
     const task = state.tasks.find((item) => item.id === taskId);
     if (!task || task.status !== "Pending") return;
+    const draft = {
+      id: app.uid("draft"),
+      client: task.client,
+      engineer: task.engineer,
+      category: task.category,
+      activity: task.activity,
+      editable: true,
+      sourceTaskId: task.id,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    state.drafts = state.drafts.filter((item) => item.sourceTaskId !== task.id);
+    state.drafts.push(draft);
+    selectedDraftId = draft.id;
     currentEditTaskId = task.id;
-    selectedDraftId = task.draftId;
+    saveState("reopenPendingTaskAsDraft", {
+      draftId: draft.id,
+      sourceTaskId: task.id,
+      siteId: task.siteId
+    });
     renderDraftSelector();
-    draftSelector.value = task.draftId;
+    draftSelector.value = draft.id;
     renderFrozenSummary();
     toggleAssignmentVisibility(true);
-    assignSiteId.value = task.siteId;
-    assignDate.value = task.date;
-    assignLocation.value = task.location;
-    assignLatitude.value = task.latitude || "";
-    assignLongitude.value = task.longitude || "";
-    districtSelect.value = task.district || "";
-    assignInstructions.value = task.instructions || "";
-    assignmentForm.querySelector('button[type="submit"]').textContent = "Update Task";
     document.querySelector('[data-page-target="task-page"]').click();
   }
 
@@ -1181,6 +1263,10 @@
       };
       state.tasks.push(task);
       saveState("assignTask", task);
+    }
+
+    if (draft.sourceTaskId) {
+      state.drafts = state.drafts.filter((item) => item.id !== draft.id);
     }
 
     resetAssignmentForm();
