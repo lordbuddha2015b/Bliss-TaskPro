@@ -60,7 +60,7 @@ button, input, select, textarea { font: inherit; }
   top: 10px;
   z-index: 5;
   height: auto;
-  padding: 12px 18px 12px;
+  padding: 8px 16px 8px;
   background: linear-gradient(135deg, #B2CD9C, #9fbc85);
   color: #f8fcff;
   display: flex;
@@ -72,7 +72,7 @@ button, input, select, textarea { font: inherit; }
 .brand-lockup {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 
 .brand-logo {
@@ -90,13 +90,13 @@ button, input, select, textarea { font: inherit; }
 
 .topbar-stack {
   display: grid;
-  gap: 6px;
+  gap: 2px;
 }
 
 .topbar-row {
   display: flex;
   justify-content: space-between;
-  gap: 14px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -118,7 +118,7 @@ button, input, select, textarea { font: inherit; }
   flex-direction: column;
   align-items: flex-end;
   justify-content: flex-start;
-  gap: 18px;
+  gap: 10px;
   margin-left: auto;
 }
 

@@ -122,7 +122,6 @@
     stopCrossDeviceSync();
     if (message) {
       app.showSyncStatus(message, "error");
-      window.alert(message);
     }
     showLogin();
   }
@@ -981,13 +980,14 @@
   function startCrossDeviceSync() {
     stopCrossDeviceSync();
     if (!state.settings.engineer.googleScriptUrl || !engineerSession?.userId || !engineerSession?.sessionToken) return;
-    if (state.settings.engineer.autoSyncEnabled === false) return;
     sessionTimer = setInterval(() => {
       validateActiveSession({ silent: true });
-    }, 15000);
-    syncTimer = setInterval(() => {
-      syncFromGoogleState({ silent: true });
-    }, 10000);
+    }, 3000);
+    if (state.settings.engineer.autoSyncEnabled !== false) {
+      syncTimer = setInterval(() => {
+        syncFromGoogleState({ silent: true });
+      }, 10000);
+    }
   }
 
   function stopCrossDeviceSync() {
@@ -1119,9 +1119,8 @@
   });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden || !engineerSession) return;
-    if (state.settings.engineer.autoSyncEnabled === false) return;
     validateActiveSession({ silent: true }).then((isValid) => {
-      if (isValid) syncFromGoogleState({ silent: true });
+      if (isValid && state.settings.engineer.autoSyncEnabled !== false) syncFromGoogleState({ silent: true });
     });
   });
 

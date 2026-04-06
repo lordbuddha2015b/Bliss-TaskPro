@@ -81,7 +81,6 @@
     stopCrossDeviceSync();
     if (message) {
       app.showSyncStatus(message, "error");
-      window.alert(message);
     }
     showMasterLogin();
   }
@@ -400,7 +399,7 @@
   }
 
   async function optimizePdfImage(dataUrl, options = {}) {
-    const { quality = 0.6, maxWidth = 1200 } = options;
+    const { quality = 0.6, maxWidth = 1200, format = "image/jpeg" } = options;
     if (!dataUrl) return "";
     return await new Promise((resolve) => {
       const image = new Image();
@@ -414,8 +413,11 @@
           resolve(dataUrl);
           return;
         }
+        context.clearRect(0, 0, canvas.width, canvas.height);
         context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", quality));
+        resolve(format === "image/png"
+          ? canvas.toDataURL("image/png")
+          : canvas.toDataURL("image/jpeg", quality));
       };
       image.onerror = () => resolve(dataUrl);
       image.src = dataUrl;
@@ -440,7 +442,7 @@
 
     const pageWidth = pdf.internal.pageSize.getWidth();
 
-    const watermarkData = await optimizePdfImage(await toDataUrl("./New Logo.png"), { quality: 0.6, maxWidth: 1200 });
+    const watermarkData = await optimizePdfImage(await toDataUrl("./New Logo.png"), { maxWidth: 1200, format: "image/png" });
 
     function drawWatermark() {
       if (!watermarkData) return;
@@ -448,7 +450,7 @@
         if (typeof pdf.GState === "function" && typeof pdf.setGState === "function") {
           pdf.setGState(new pdf.GState({ opacity: 0.08 }));
         }
-        pdf.addImage(watermarkData, "JPEG", pageWidth / 2 - 45, 95, 90, 90);
+        pdf.addImage(watermarkData, "PNG", pageWidth / 2 - 45, 95, 90, 90);
         if (typeof pdf.GState === "function" && typeof pdf.setGState === "function") {
           pdf.setGState(new pdf.GState({ opacity: 1 }));
         }
@@ -1012,13 +1014,14 @@
   function startCrossDeviceSync() {
     stopCrossDeviceSync();
     if (!state.settings.master.googleScriptUrl || !masterSession?.userId || !masterSession?.sessionToken) return;
-    if (state.settings.master.autoSyncEnabled === false) return;
     sessionTimer = setInterval(() => {
       validateActiveSession({ silent: true });
-    }, 15000);
-    syncTimer = setInterval(() => {
-      syncFromGoogleState({ silent: true });
-    }, 10000);
+    }, 3000);
+    if (state.settings.master.autoSyncEnabled !== false) {
+      syncTimer = setInterval(() => {
+        syncFromGoogleState({ silent: true });
+      }, 10000);
+    }
   }
 
   function stopCrossDeviceSync() {
@@ -1383,9 +1386,8 @@
   });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden || !masterSession) return;
-    if (state.settings.master.autoSyncEnabled === false) return;
     validateActiveSession({ silent: true }).then((isValid) => {
-      if (isValid) syncFromGoogleState({ silent: true });
+      if (isValid && state.settings.master.autoSyncEnabled !== false) syncFromGoogleState({ silent: true });
     });
   });
 
