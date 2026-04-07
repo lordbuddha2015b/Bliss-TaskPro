@@ -2,6 +2,69 @@
 
 Bliss TaskPro includes a Master web app and an Engineer web app for draft creation, task assignment, field execution, sync, uploads, and PDF export.
 
+## Hostinger Migration
+
+This project can be deployed to Hostinger as a static site on:
+
+- `https://blissinfra.in`
+
+### Production Config
+
+- Frontend base domain: `https://blissinfra.in`
+- Google Apps Script config in [code.gs](E:\Bob_Coding\Bliss TaskPro\Bliss-TaskPro\code.gs):
+  - `APP_URL = https://blissinfra.in`
+  - `ALLOWED_ORIGIN = https://blissinfra.in`
+- Production env file: [\.env](E:\Bob_Coding\Bliss TaskPro\Bliss-TaskPro\.env)
+- Hostinger rewrite rules: [\.htaccess](E:\Bob_Coding\Bliss TaskPro\Bliss-TaskPro\.htaccess)
+- Static auth callback placeholder: [index.html](E:\Bob_Coding\Bliss TaskPro\Bliss-TaskPro\auth\callback\index.html)
+
+### Build For Hostinger
+
+This repo does not use a framework build today. A packaging build is included for Hostinger:
+
+1. Run `npm install`
+2. Run `npm run build`
+3. Upload the contents of [public_html](E:\Bob_Coding\Bliss TaskPro\Bliss-TaskPro\dist\public_html) to Hostinger `public_html`
+
+The build copies:
+
+- `index.html`
+- `engineer.html`
+- `styles.css`
+- `shared.js`
+- `master.js`
+- `engineer.js`
+- `json/`
+- `Images/`
+- `New Logo.png`
+- `.htaccess`
+- `auth/callback/index.html`
+
+### Hostinger Folder Structure
+
+```text
+/public_html
+  index.html
+  engineer.html
+  styles.css
+  shared.js
+  master.js
+  engineer.js
+  /json
+  /Images
+  /auth/callback/index.html
+  .htaccess
+```
+
+### Important Notes
+
+- This codebase does not contain a local `/api` backend. The frontend talks directly to Google Apps Script through the Apps Script URL saved in app settings.
+- This codebase also does not contain Google OAuth login logic. Current login is credential-sheet based through Apps Script, not Google Sign-In.
+- Because uploads go browser -> Google Apps Script -> Google Drive, Hostinger upload size/timeouts are not the upload bottleneck in the current architecture.
+- If Google OAuth is added later, use:
+  - Authorized JavaScript origin: `https://blissinfra.in`
+  - Redirect URI: `https://blissinfra.in/auth/callback`
+
 ## Features
 
 - Master draft creation with Client, Engineer, Category, and Activity

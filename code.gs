@@ -2,8 +2,8 @@ const CONFIG = {
   APP_NAME: 'Bliss TaskPro',
   CREDENTIAL_SHEET_ID: '1RuV_gocgi-DwFpN8uQqwE-MWiwHvXBg1-Ly0gL-ZbEk',
   SITE_ROOT_FOLDER_ID: '1I4xotaTUYN8PRYhfCzDST2OeRs0voiE1',
-  APP_URL: 'PASTE_DEPLOYED_APPS_SCRIPT_WEB_APP_URL_HERE',
-  ALLOWED_ORIGIN: '*'
+  APP_URL: 'https://blissinfra.in',
+  ALLOWED_ORIGIN: 'https://blissinfra.in'
 };
 
 const SHEET_NAMES = {

@@ -1,0 +1,9 @@
+{
+  "name": "bliss-taskpro",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Bliss TaskPro static web app build package for Hostinger deployment.",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  }
+}

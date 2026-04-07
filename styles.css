@@ -85,8 +85,8 @@ button, input, select, textarea { font: inherit; }
 
 .hero-logo { width: 340px; height: 340px; }
 .login-logo { width: 320px; height: 320px; }
-.topbar-logo { width: 128px; height: 128px; }
-.compact-title { font-size: clamp(1.7rem, 4vw, 2.6rem); }
+.topbar-logo { width: 88px; height: 88px; }
+.compact-title { font-size: clamp(1.4rem, 3.2vw, 2.2rem); }
 
 .topbar-stack {
   display: grid;
@@ -838,7 +838,7 @@ tbody td:not(:last-child)::after {
   .login-card { padding: 18px; }
   .brand-lockup { align-items: flex-start; }
   .brand-logo { width: 180px; height: 180px; }
-  .topbar-logo { width: 92px; height: 92px; }
+  .topbar-logo { width: 72px; height: 72px; }
   .hero-logo,
   .login-logo { width: 200px; height: 200px; }
   .form-grid { grid-template-columns: 1fr; }

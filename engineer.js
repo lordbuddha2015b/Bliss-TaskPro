@@ -982,7 +982,7 @@
     if (!state.settings.engineer.googleScriptUrl || !engineerSession?.userId || !engineerSession?.sessionToken) return;
     sessionTimer = setInterval(() => {
       validateActiveSession({ silent: true });
-    }, 3000);
+    }, 2000);
     if (state.settings.engineer.autoSyncEnabled !== false) {
       syncTimer = setInterval(() => {
         syncFromGoogleState({ silent: true });

@@ -442,7 +442,7 @@
 
     const pageWidth = pdf.internal.pageSize.getWidth();
 
-    const watermarkData = await optimizePdfImage(await toDataUrl("./New Logo.png"), { maxWidth: 1200, format: "image/png" });
+    const watermarkData = await optimizePdfImage(await toDataUrl("./Images/BlissTaskPro_Logo.png"), { maxWidth: 900, format: "image/png" });
 
     function drawWatermark() {
       if (!watermarkData) return;
@@ -450,7 +450,7 @@
         if (typeof pdf.GState === "function" && typeof pdf.setGState === "function") {
           pdf.setGState(new pdf.GState({ opacity: 0.08 }));
         }
-        pdf.addImage(watermarkData, "PNG", pageWidth / 2 - 45, 95, 90, 90);
+        pdf.addImage(watermarkData, "PNG", pageWidth / 2 - 38, 102, 76, 76);
         if (typeof pdf.GState === "function" && typeof pdf.setGState === "function") {
           pdf.setGState(new pdf.GState({ opacity: 1 }));
         }
@@ -1016,7 +1016,7 @@
     if (!state.settings.master.googleScriptUrl || !masterSession?.userId || !masterSession?.sessionToken) return;
     sessionTimer = setInterval(() => {
       validateActiveSession({ silent: true });
-    }, 3000);
+    }, 2000);
     if (state.settings.master.autoSyncEnabled !== false) {
       syncTimer = setInterval(() => {
         syncFromGoogleState({ silent: true });
