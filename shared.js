@@ -10,7 +10,7 @@
   const SHARED_DISPLAY_NAME_KEY = "displayName";
   const MASTER_SCRIPT_URL_KEY = "bliss-taskpro-master-script-url";
   const ENGINEER_SCRIPT_URL_KEY = "bliss-taskpro-engineer-script-url";
-  const BOOTSTRAP_SCRIPT_URL = "PASTE_DEPLOYED_APPS_SCRIPT_WEB_APP_URL_HERE";
+  const DEFAULT_LOGIN_API = "https://script.google.com/macros/s/AKfycbw07_qISib94zR0xaleVDpdoQnyxSTU8DzKJH8Fibw/exec";
 
   const defaults = {
     options: {
@@ -165,7 +165,7 @@
     return sanitizeGoogleValue(
       localStorage.getItem(getScriptStorageKey(role))
       || localStorage.getItem(SHARED_SCRIPT_URL_KEY)
-      || BOOTSTRAP_SCRIPT_URL
+      || DEFAULT_LOGIN_API
     );
   }
 
@@ -443,9 +443,9 @@
   }
 
   async function loginWithGoogle(settings, role, userId, password) {
-    const endpoint = resolveGoogleScriptUrl(settings, role);
+    const endpoint = sanitizeGoogleValue(DEFAULT_LOGIN_API);
     if (!endpoint) {
-      return { ok: false, message: "Apps Script bootstrap URL is not configured." };
+      return { ok: false, message: "Default login API is not configured." };
     }
     try {
       const url = new URL(endpoint);
@@ -625,8 +625,8 @@
     if (/Credential sheet not found/i.test(message) || /Credential sheet is empty/i.test(message)) {
       return `${message} Check your Google Sheet tabs and login rows.`;
     }
-    if (/Apps Script bootstrap URL is not configured/i.test(message)) {
-      return "Apps Script bootstrap URL is not configured.";
+    if (/Default login API is not configured/i.test(message)) {
+      return "Default login API is not configured.";
     }
     return message;
   }
