@@ -10,6 +10,7 @@
   const SHARED_DISPLAY_NAME_KEY = "displayName";
   const MASTER_SCRIPT_URL_KEY = "bliss-taskpro-master-script-url";
   const ENGINEER_SCRIPT_URL_KEY = "bliss-taskpro-engineer-script-url";
+  const APPS_SCRIPT_PROXY_URL = "/api/apps-script-proxy.php";
   const DEFAULT_LOGIN_API = {
     master: "https://script.google.com/macros/s/AKfycbxdVLShug748qRYTRjDsg3INyGLGXAnKeqPnNA2AHzjoSbdu1YABRhwlUN47JXe46yU/exec",
     engineer: "https://script.google.com/macros/s/AKfycbwFAw5fOPSCQ3w1sX4hfc4utmuSlDTIy_6hgC1DCbhkJX6ZgKSakGV6YIIwFmsJmks/exec"
@@ -185,6 +186,20 @@
     return sanitizeGoogleValue(settings?.googleScriptUrl) || readStoredScriptUrl(role);
   }
 
+  async function proxyAppsScriptRequest({ scriptUrl, method = "GET", query = {}, body = null }) {
+    const response = await fetch(APPS_SCRIPT_PROXY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scriptUrl,
+        method,
+        query,
+        body
+      })
+    });
+    return await response.json();
+  }
+
   function clearSharedLoginContext(role) {
     if (!role || localStorage.getItem(SHARED_ROLE_KEY) === role) {
       localStorage.removeItem(SHARED_SCRIPT_URL_KEY);
@@ -323,12 +338,11 @@
     const endpoint = resolveGoogleScriptUrl(activeSettings, source);
     if (!endpoint) return { skipped: true };
     try {
-      const response = await fetch(endpoint, {
+      const data = await proxyAppsScriptRequest({
+        scriptUrl: endpoint,
         method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ ...payload, state: sanitizeStateForStorage(state), activeSettings })
+        body: { ...payload, state: sanitizeStateForStorage(state), activeSettings }
       });
-      const data = await response.json();
       return data?.ok === false ? { skipped: false, error: new Error(data.message || data.error || "Sync failed"), sessionExpired: !!data.sessionExpired } : { skipped: false, data };
     } catch (error) {
       return { skipped: false, error };
@@ -345,18 +359,17 @@
     const endpoint = resolveGoogleScriptUrl(settings, session?.role || "master");
     if (!endpoint) return { ok: false, message: "Apps Script endpoint is not available." };
     try {
-      const response = await fetch(endpoint, {
+      return await proxyAppsScriptRequest({
+        scriptUrl: endpoint,
         method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({
+        body: {
           action: "savePdfToDrive",
           source: session?.role || "master",
           userId: session?.userId || "",
           sessionToken: session?.sessionToken || "",
           payload
-        })
+        }
       });
-      return await response.json();
     } catch (error) {
       return { ok: false, message: error.message || "Unable to save PDF to Drive." };
     }
@@ -366,18 +379,17 @@
     const endpoint = resolveGoogleScriptUrl(settings, session?.role || "engineer");
     if (!endpoint) return { ok: false, message: "Apps Script endpoint is not available." };
     try {
-      const response = await fetch(endpoint, {
+      return await proxyAppsScriptRequest({
+        scriptUrl: endpoint,
         method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({
+        body: {
           action: "deleteDriveFile",
           source: session?.role || "engineer",
           userId: session?.userId || "",
           sessionToken: session?.sessionToken || "",
           payload
-        })
+        }
       });
-      return await response.json();
     } catch (error) {
       return { ok: false, message: error.message || "Unable to delete Drive file." };
     }
@@ -387,18 +399,17 @@
     const endpoint = resolveGoogleScriptUrl(settings, session?.role || "master");
     if (!endpoint) return { ok: false, message: "Apps Script endpoint is not available." };
     try {
-      const response = await fetch(endpoint, {
+      return await proxyAppsScriptRequest({
+        scriptUrl: endpoint,
         method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({
+        body: {
           action: "saveReportFiles",
           source: session?.role || "master",
           userId: session?.userId || "",
           sessionToken: session?.sessionToken || "",
           payload
-        })
+        }
       });
-      return await response.json();
     } catch (error) {
       return { ok: false, message: error.message || "Unable to save report files." };
     }
@@ -408,18 +419,17 @@
     const endpoint = resolveGoogleScriptUrl(settings, session?.role || "");
     if (!endpoint || !siteId) return null;
     try {
-      const url = new URL(endpoint);
-      url.searchParams.set("action", "getTask");
-      url.searchParams.set("siteId", siteId);
-      url.searchParams.set("source", session?.role || "");
-      url.searchParams.set("userId", session?.userId || "");
-      url.searchParams.set("sessionToken", session?.sessionToken || "");
-      const response = await fetch(url.toString(), {
-        headers: {
-          Accept: "application/json"
+      return await proxyAppsScriptRequest({
+        scriptUrl: endpoint,
+        method: "GET",
+        query: {
+          action: "getTask",
+          siteId,
+          source: session?.role || "",
+          userId: session?.userId || "",
+          sessionToken: session?.sessionToken || ""
         }
       });
-      return await response.json();
     } catch (error) {
       return null;
     }
@@ -429,18 +439,16 @@
     const endpoint = resolveGoogleScriptUrl(settings, session?.role || "");
     if (!endpoint) return null;
     try {
-      const url = new URL(endpoint);
-      url.searchParams.set("action", "getState");
-      url.searchParams.set("source", session?.role || "");
-      url.searchParams.set("userId", session?.userId || "");
-      url.searchParams.set("sessionToken", session?.sessionToken || "");
-      const response = await fetch(url.toString(), {
-        headers: {
-          Accept: "application/json"
+      return await proxyAppsScriptRequest({
+        scriptUrl: endpoint,
+        method: "GET",
+        query: {
+          action: "getState",
+          source: session?.role || "",
+          userId: session?.userId || "",
+          sessionToken: session?.sessionToken || ""
         }
       });
-      const data = await response.json();
-      return data || null;
     } catch (error) {
       return null;
     }
@@ -452,19 +460,17 @@
       return { ok: false, message: "Default login API is not configured." };
     }
     try {
-      const url = new URL(endpoint);
-      url.searchParams.set("action", "login");
-      const response = await fetch(url.toString(), {
+      const data = await proxyAppsScriptRequest({
+        scriptUrl: endpoint,
         method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({
+        query: { action: "login" },
+        body: {
           action: "login",
           source: role,
           activeSettings: settings,
           payload: { role, userId, password }
-        })
+        }
       });
-      const data = await response.json();
       if (data?.ok) {
         data.scriptURL = sanitizeGoogleValue(data.scriptURL) || endpoint;
         data.status = data.status || "success";
@@ -484,12 +490,10 @@
     const endpoint = resolveGoogleScriptUrl(settings, document.body?.dataset?.app === "engineer" ? "engineer" : "master");
     if (!endpoint) return null;
     try {
-      const response = await fetch(endpoint, {
-        headers: {
-          Accept: "application/json"
-        }
+      const data = await proxyAppsScriptRequest({
+        scriptUrl: endpoint,
+        method: "GET"
       });
-      const data = await response.json();
       if (!data?.ok) return null;
       return {
         googleScriptUrl: sanitizeGoogleValue(data.scriptURL) || endpoint,
@@ -557,17 +561,16 @@
     const endpoint = resolveGoogleScriptUrl(settings, session?.role || "");
     if (!endpoint || !session?.userId || !session?.sessionToken) return { ok: false, sessionExpired: true };
     try {
-      const url = new URL(endpoint);
-      url.searchParams.set("action", "validateSession");
-      url.searchParams.set("role", session.role || "");
-      url.searchParams.set("userId", session.userId || "");
-      url.searchParams.set("sessionToken", session.sessionToken || "");
-      const response = await fetch(url.toString(), {
-        headers: {
-          Accept: "application/json"
+      return await proxyAppsScriptRequest({
+        scriptUrl: endpoint,
+        method: "GET",
+        query: {
+          action: "validateSession",
+          role: session.role || "",
+          userId: session.userId || "",
+          sessionToken: session.sessionToken || ""
         }
       });
-      return await response.json();
     } catch (error) {
       return { ok: false, message: "Unable to validate session." };
     }
