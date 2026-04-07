@@ -11,8 +11,8 @@
   const MASTER_SCRIPT_URL_KEY = "bliss-taskpro-master-script-url";
   const ENGINEER_SCRIPT_URL_KEY = "bliss-taskpro-engineer-script-url";
   const DEFAULT_LOGIN_API = {
-    master: "https://script.google.com/macros/s/AKfycbxJzYz9p3v0dKueOf2tusTQaVIsAFnewC-w3ODMBXo8ZdWLKTltcTQI8uoJED4ZbTZx/exec",
-    engineer: "https://script.google.com/macros/s/AKfycbwo7_qlSib94zR0xaIeVDpdoQnyxSTU8DzKJH8Fibwc1UitjcyJcGjInlwfexsJcXRf/exec"
+    master: "https://script.google.com/macros/s/AKfycbxdVLShug748qRYTRjDsg3INyGLGXAnKeqPnNA2AHzjoSbdu1YABRhwlUN47JXe46yU/exec",
+    engineer: "https://script.google.com/macros/s/AKfycbwFAw5fOPSCQ3w1sX4hfc4utmuSlDTIy_6hgC1DCbhkJX6ZgKSakGV6YIIwFmsJmks/exec"
   };
 
   const defaults = {
