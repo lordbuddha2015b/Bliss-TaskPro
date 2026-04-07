@@ -4,8 +4,13 @@
   const ENGINEER_SETTINGS_KEY = "bliss-taskpro-engineer-settings";
   const MASTER_SESSION_KEY = "bliss-taskpro-master-session";
   const ENGINEER_SESSION_KEY = "bliss-taskpro-engineer-session";
-  const CREDENTIAL_SHEET_ID = "1RuV_gocgi-DwFpN8uQqwE-MWiwHvXBg1-Ly0gL-ZbEk";
-  const ENGINEER_CREDENTIAL_SHEET_NAME = "Engineer_Credential";
+  const SHARED_SCRIPT_URL_KEY = "scriptURL";
+  const SHARED_SESSION_TOKEN_KEY = "sessionToken";
+  const SHARED_ROLE_KEY = "userRole";
+  const SHARED_DISPLAY_NAME_KEY = "displayName";
+  const MASTER_SCRIPT_URL_KEY = "bliss-taskpro-master-script-url";
+  const ENGINEER_SCRIPT_URL_KEY = "bliss-taskpro-engineer-script-url";
+  const BOOTSTRAP_SCRIPT_URL = "PASTE_DEPLOYED_APPS_SCRIPT_WEB_APP_URL_HERE";
 
   const defaults = {
     options: {
@@ -140,13 +145,62 @@
     if (appName === "master") {
       state.settings.master.googleScriptUrl = "";
       localStorage.removeItem(MASTER_SETTINGS_KEY);
+      localStorage.removeItem(MASTER_SCRIPT_URL_KEY);
       sessionStorage.removeItem(MASTER_SESSION_KEY);
     } else {
       state.settings.engineer.googleScriptUrl = "";
       localStorage.removeItem(ENGINEER_SETTINGS_KEY);
+      localStorage.removeItem(ENGINEER_SCRIPT_URL_KEY);
       sessionStorage.removeItem(ENGINEER_SESSION_KEY);
     }
+    clearSharedLoginContext(appName);
     writeState(state);
+  }
+
+  function getScriptStorageKey(role) {
+    return role === "engineer" ? ENGINEER_SCRIPT_URL_KEY : MASTER_SCRIPT_URL_KEY;
+  }
+
+  function readStoredScriptUrl(role) {
+    return sanitizeGoogleValue(
+      localStorage.getItem(getScriptStorageKey(role))
+      || localStorage.getItem(SHARED_SCRIPT_URL_KEY)
+      || BOOTSTRAP_SCRIPT_URL
+    );
+  }
+
+  function persistRoleScriptUrl(role, scriptUrl) {
+    const sanitized = sanitizeGoogleValue(scriptUrl);
+    if (!sanitized) return "";
+    localStorage.setItem(getScriptStorageKey(role), sanitized);
+    localStorage.setItem(SHARED_SCRIPT_URL_KEY, sanitized);
+    return sanitized;
+  }
+
+  function resolveGoogleScriptUrl(settings, role) {
+    return sanitizeGoogleValue(settings?.googleScriptUrl) || readStoredScriptUrl(role);
+  }
+
+  function clearSharedLoginContext(role) {
+    if (!role || localStorage.getItem(SHARED_ROLE_KEY) === role) {
+      localStorage.removeItem(SHARED_SCRIPT_URL_KEY);
+      localStorage.removeItem(SHARED_SESSION_TOKEN_KEY);
+      localStorage.removeItem(SHARED_ROLE_KEY);
+      localStorage.removeItem(SHARED_DISPLAY_NAME_KEY);
+    }
+  }
+
+  function cacheLoginContext(role, response) {
+    const scriptUrl = persistRoleScriptUrl(role, response?.scriptURL || response?.user?.scriptURL || "");
+    if (scriptUrl) {
+      localStorage.setItem(SHARED_SCRIPT_URL_KEY, scriptUrl);
+    }
+    if (response?.sessionToken) {
+      localStorage.setItem(SHARED_SESSION_TOKEN_KEY, response.sessionToken);
+    }
+    localStorage.setItem(SHARED_ROLE_KEY, role);
+    localStorage.setItem(SHARED_DISPLAY_NAME_KEY, response?.name || response?.user?.name || "");
+    return scriptUrl;
   }
 
   function uid(prefix) {
@@ -262,7 +316,7 @@
   async function postGoogleSync(state, payload) {
     const source = payload.source === "engineer" ? "engineer" : "master";
     const activeSettings = state.settings?.[source] || {};
-    const endpoint = activeSettings.googleScriptUrl;
+    const endpoint = resolveGoogleScriptUrl(activeSettings, source);
     if (!endpoint) return { skipped: true };
     try {
       const response = await fetch(endpoint, {
@@ -284,8 +338,8 @@
   }
 
   async function savePdfToDrive(settings, session, payload) {
-    const endpoint = settings?.googleScriptUrl;
-    if (!endpoint) return { ok: false, message: "Apps Script URL is required in settings." };
+    const endpoint = resolveGoogleScriptUrl(settings, session?.role || "master");
+    if (!endpoint) return { ok: false, message: "Apps Script endpoint is not available." };
     try {
       const response = await fetch(endpoint, {
         method: "POST",
@@ -305,8 +359,8 @@
   }
 
   async function deleteDriveFile(settings, session, payload) {
-    const endpoint = settings?.googleScriptUrl;
-    if (!endpoint) return { ok: false, message: "Apps Script URL is required in settings." };
+    const endpoint = resolveGoogleScriptUrl(settings, session?.role || "engineer");
+    if (!endpoint) return { ok: false, message: "Apps Script endpoint is not available." };
     try {
       const response = await fetch(endpoint, {
         method: "POST",
@@ -326,8 +380,8 @@
   }
 
   async function saveReportFiles(settings, session, payload) {
-    const endpoint = settings?.googleScriptUrl;
-    if (!endpoint) return { ok: false, message: "Apps Script URL is required in settings." };
+    const endpoint = resolveGoogleScriptUrl(settings, session?.role || "master");
+    if (!endpoint) return { ok: false, message: "Apps Script endpoint is not available." };
     try {
       const response = await fetch(endpoint, {
         method: "POST",
@@ -347,7 +401,7 @@
   }
 
   async function fetchGoogleTask(settings, siteId, session) {
-    const endpoint = settings.googleScriptUrl;
+    const endpoint = resolveGoogleScriptUrl(settings, session?.role || "");
     if (!endpoint || !siteId) return null;
     try {
       const url = new URL(endpoint);
@@ -368,7 +422,7 @@
   }
 
   async function fetchGoogleState(settings, session) {
-    const endpoint = settings.googleScriptUrl;
+    const endpoint = resolveGoogleScriptUrl(settings, session?.role || "");
     if (!endpoint) return null;
     try {
       const url = new URL(endpoint);
@@ -389,9 +443,9 @@
   }
 
   async function loginWithGoogle(settings, role, userId, password) {
-    const endpoint = settings.googleScriptUrl;
+    const endpoint = resolveGoogleScriptUrl(settings, role);
     if (!endpoint) {
-      return { ok: false, message: "Apps Script URL is required in settings." };
+      return { ok: false, message: "Apps Script bootstrap URL is not configured." };
     }
     try {
       const response = await fetch(endpoint, {
@@ -405,7 +459,11 @@
         })
       });
       const data = await response.json();
-      if (data?.ok) return data;
+      if (data?.ok) {
+        data.scriptURL = sanitizeGoogleValue(data.scriptURL) || endpoint;
+        data.status = data.status || "success";
+        return data;
+      }
       return {
         ok: false,
         message: data?.message || data?.error || "Login failed.",
@@ -417,7 +475,7 @@
   }
 
   async function fetchGoogleConfig(settings) {
-    const endpoint = settings.googleScriptUrl;
+    const endpoint = resolveGoogleScriptUrl(settings, document.body?.dataset?.app === "engineer" ? "engineer" : "master");
     if (!endpoint) return null;
     try {
       const response = await fetch(endpoint, {
@@ -428,6 +486,7 @@
       const data = await response.json();
       if (!data?.ok) return null;
       return {
+        googleScriptUrl: sanitizeGoogleValue(data.scriptURL) || endpoint,
         siteRootFolderId: sanitizeGoogleValue(data.siteRootFolderId)
       };
     } catch (error) {
@@ -451,59 +510,23 @@
     };
   }
 
-  function parseGoogleVisualizationJson(text) {
-    const raw = String(text || "").trim();
-    if (!raw) return null;
-    const start = raw.indexOf("{");
-    const end = raw.lastIndexOf("}");
-    if (start === -1 || end === -1 || end <= start) return null;
-    try {
-      return JSON.parse(raw.slice(start, end + 1));
-    } catch (error) {
-      return null;
-    }
-  }
-
-  async function fetchEngineerOptionsFromCredentialSheet() {
-    const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(CREDENTIAL_SHEET_ID)}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(ENGINEER_CREDENTIAL_SHEET_NAME)}`;
-    try {
-      const response = await fetch(url, {
-        headers: {
-          Accept: "text/plain"
-        }
-      });
-      const text = await response.text();
-      const data = parseGoogleVisualizationJson(text);
-      const cols = data?.table?.cols || [];
-      const rows = data?.table?.rows || [];
-      const displayNameIndex = cols.findIndex((col) => String(col?.label || "").trim().toLowerCase() === "display name");
-      if (displayNameIndex === -1) return [];
-      const seen = new Set();
-      return rows
-        .map((row) => row?.c?.[displayNameIndex]?.v)
-        .map((value) => String(value || "").trim())
-        .filter((value) => {
-          if (!value || seen.has(value)) return false;
-          seen.add(value);
-          return true;
-        });
-    } catch (error) {
-      return [];
-    }
-  }
-
   function normalizeSettings(input, fallback) {
     const base = JSON.parse(JSON.stringify(fallback));
-    if (!input) return base;
+    if (!input) {
+      return {
+        master: { ...base.master, googleScriptUrl: readStoredScriptUrl("master") },
+        engineer: { ...base.engineer, googleScriptUrl: readStoredScriptUrl("engineer") }
+      };
+    }
     if (input.master || input.engineer) {
       return {
-        master: { ...base.master, ...(input.master || {}) },
-        engineer: { ...base.engineer, ...(input.engineer || {}) }
+        master: { ...base.master, ...(input.master || {}), googleScriptUrl: sanitizeGoogleValue(input.master?.googleScriptUrl) || readStoredScriptUrl("master") },
+        engineer: { ...base.engineer, ...(input.engineer || {}), googleScriptUrl: sanitizeGoogleValue(input.engineer?.googleScriptUrl) || readStoredScriptUrl("engineer") }
       };
     }
     return {
-      master: { ...base.master, ...(input || {}) },
-      engineer: { ...base.engineer }
+      master: { ...base.master, ...(input || {}), googleScriptUrl: sanitizeGoogleValue(input?.googleScriptUrl) || readStoredScriptUrl("master") },
+      engineer: { ...base.engineer, googleScriptUrl: readStoredScriptUrl("engineer") }
     };
   }
 
@@ -525,7 +548,7 @@
   }
 
   async function validateGoogleSession(settings, session) {
-    const endpoint = settings.googleScriptUrl;
+    const endpoint = resolveGoogleScriptUrl(settings, session?.role || "");
     if (!endpoint || !session?.userId || !session?.sessionToken) return { ok: false, sessionExpired: true };
     try {
       const url = new URL(endpoint);
@@ -601,7 +624,10 @@
       return `${message} Check your Google Sheet tabs and login rows.`;
     }
     if (/Apps Script URL is required/i.test(message)) {
-      return `${message} Open Settings and save the deployed Apps Script Web App URL first.`;
+      return `${message} Login bootstrap is missing. Configure the shared Apps Script endpoint once in code.`;
+    }
+    if (/Apps Script bootstrap URL is not configured/i.test(message)) {
+      return "Apps Script bootstrap URL is not configured.";
     }
     return message;
   }
@@ -653,11 +679,14 @@
     reverseGeocodeDistrict,
     loginWithGoogle,
     fetchGoogleConfig,
-    fetchEngineerOptionsFromCredentialSheet,
     formatLoginFailure,
     validateGoogleSession,
     mergeGoogleSettings,
     mergeRemoteOptions,
+    resolveGoogleScriptUrl,
+    persistRoleScriptUrl,
+    cacheLoginContext,
+    clearSharedLoginContext,
     showSyncStatus,
     hideSyncStatus,
     saveMasterSession,

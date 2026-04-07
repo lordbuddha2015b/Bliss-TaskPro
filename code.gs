@@ -11,7 +11,7 @@ const SHEET_NAMES = {
   engineerCredential: 'Engineer_Credential'
 };
 
-const USER_HEADERS = ['User ID', 'Password', 'Role', 'Display Name', 'Status', 'Session Token', 'Session Updated At'];
+const USER_HEADERS = ['User ID', 'Password', 'Role', 'Display Name', 'Status', 'Session Token', 'Session Updated At', 'Apps Script URL'];
 const SITE_MASTER_HEADERS = ['Site ID', 'Client', 'Engineer', 'Category', 'Activity', 'Date', 'Location', 'District', 'Instructions', 'Created Date'];
 const SITE_ENGINEER_HEADERS = ['Site Engineer Name', 'Status', 'Documents JSON', 'Photos JSON', 'Measurement Text', 'Measurement Images JSON', 'Latitude', 'Longitude', 'Completed Date', 'Rollback Reason'];
 
@@ -23,8 +23,10 @@ function doGet(e) {
   if (action === 'validateSession') return jsonOutput(validateSessionFromParams_(params));
   return jsonOutput({
     ok: true,
+    status: 'success',
     appName: CONFIG.APP_NAME,
-    siteRootFolderId: CONFIG.SITE_ROOT_FOLDER_ID
+    siteRootFolderId: CONFIG.SITE_ROOT_FOLDER_ID,
+    scriptURL: getDefaultScriptUrl_()
   });
 }
 
@@ -68,6 +70,7 @@ function doPost(e) {
   } catch (error) {
     return jsonOutput({
       ok: false,
+      status: 'error',
       message: error.message,
       error: error.message
     });
@@ -103,6 +106,7 @@ function getLatestAppState_(params) {
   const tasks = readAllSiteTasks_();
   return {
     ok: true,
+    status: 'success',
     state: {
       options: buildLatestOptions_(tasks),
       settings: {},
@@ -148,11 +152,11 @@ function loginUser_(payload) {
   const requestedRole = String(payload.role || '').toLowerCase();
   const sheetName = requestedRole === 'master' ? SHEET_NAMES.masterCredential : SHEET_NAMES.engineerCredential;
   const sheet = getCredentialSpreadsheet_().getSheetByName(sheetName);
-  if (!sheet) return { ok: false, message: 'Credential sheet not found: ' + sheetName };
+  if (!sheet) return { ok: false, status: 'error', message: 'Credential sheet not found: ' + sheetName };
 
   ensureHeaders_(sheet, USER_HEADERS);
   const values = sheet.getDataRange().getValues();
-  if (values.length <= 1) return { ok: false, message: 'Credential sheet is empty: ' + sheetName };
+  if (values.length <= 1) return { ok: false, status: 'error', message: 'Credential sheet is empty: ' + sheetName };
 
   const rows = values.slice(1);
   const inputUserId = String(payload.userId || '').trim().toLowerCase();
@@ -161,21 +165,27 @@ function loginUser_(payload) {
     return String(row[0] || '').trim().toLowerCase() === inputUserId;
   });
 
-  if (!match) return { ok: false, message: 'User ID not found in ' + sheetName + ': ' + payload.userId };
-  if (String(match[1] || '').trim() !== inputPassword) return { ok: false, message: 'Password mismatch for user ID: ' + payload.userId };
-  if (String(match[4] || 'ACTIVE').toUpperCase() === 'INACTIVE') return { ok: false, message: 'User is inactive: ' + payload.userId };
+  if (!match) return { ok: false, status: 'error', message: 'Invalid credentials' };
+  if (String(match[1] || '').trim() !== inputPassword) return { ok: false, status: 'error', message: 'Invalid credentials' };
+  if (String(match[4] || 'ACTIVE').toUpperCase() === 'INACTIVE') return { ok: false, status: 'error', message: 'User is inactive: ' + payload.userId };
 
   const rowIndex = rows.indexOf(match) + 2;
   const sessionToken = createSessionToken_();
   const sessionUpdatedAt = new Date().toISOString();
   sheet.getRange(rowIndex, 6, 1, 2).setValues([[sessionToken, sessionUpdatedAt]]);
+  const scriptURL = getCredentialScriptUrl_(match);
 
   return {
     ok: true,
+    status: 'success',
+    role: match[2],
+    name: match[3] || match[0],
+    scriptURL: scriptURL,
     user: {
       userId: match[0],
       role: match[2],
-      name: match[3] || match[0]
+      name: match[3] || match[0],
+      scriptURL: scriptURL
     },
     sessionToken: sessionToken,
     sessionUpdatedAt: sessionUpdatedAt
@@ -221,6 +231,7 @@ function validateSession_(payload) {
 
   return {
     ok: true,
+    status: 'success',
     sessionExpired: false,
     user: {
       userId: user[0],
@@ -489,6 +500,18 @@ function getCredentialSpreadsheet_() {
     throw new Error('Please update CONFIG.CREDENTIAL_SHEET_ID in code.gs');
   }
   return SpreadsheetApp.openById(CONFIG.CREDENTIAL_SHEET_ID);
+}
+
+function getCredentialScriptUrl_(row) {
+  return String((row && row[7]) || '').trim() || getDefaultScriptUrl_();
+}
+
+function getDefaultScriptUrl_() {
+  try {
+    return String(ScriptApp.getService().getUrl() || '').trim();
+  } catch (error) {
+    return '';
+  }
 }
 
 function getRootSiteFolder_() {

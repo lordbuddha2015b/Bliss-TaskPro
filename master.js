@@ -20,7 +20,6 @@
 
   const masterForm = document.getElementById("master-filter-form");
   const assignmentForm = document.getElementById("task-assignment-form");
-  const googleScriptInput = document.getElementById("google-script-url");
   const masterSyncButton = document.getElementById("master-sync-button");
 
   const clientMaster = document.getElementById("clientMaster");
@@ -78,6 +77,7 @@
   function forceLogout(message) {
     masterSession = null;
     app.clearMasterSession();
+    app.clearSharedLoginContext("master");
     stopCrossDeviceSync();
     if (message) {
       app.showSyncStatus(message, "error");
@@ -954,7 +954,6 @@
     if (currentEditDraftId && !state.drafts.some((draft) => draft.id === currentEditDraftId)) {
       currentEditDraftId = "";
     }
-    googleScriptInput.value = state.settings.master.googleScriptUrl || "";
     setOptions();
     toggleOtherField(clientMaster, clientMasterOther, "clientMasterOtherWrap", "client");
     toggleOtherField(engineerMaster, engineerMasterOther, "engineerMasterOtherWrap", "engineer");
@@ -1013,7 +1012,7 @@
 
   function startCrossDeviceSync() {
     stopCrossDeviceSync();
-    if (!state.settings.master.googleScriptUrl || !masterSession?.userId || !masterSession?.sessionToken) return;
+    if (!app.resolveGoogleScriptUrl(state.settings.master, "master") || !masterSession?.userId || !masterSession?.sessionToken) return;
     sessionTimer = setInterval(() => {
       validateActiveSession({ silent: true });
     }, 2000);
@@ -1125,7 +1124,6 @@
   }
 
   function openSettings() {
-    googleScriptInput.value = state.settings.master.googleScriptUrl || "";
     document.getElementById("settings-modal").classList.remove("hidden");
   }
 
@@ -1148,6 +1146,7 @@
     const config = await app.fetchGoogleConfig(state.settings.master);
     if (!config) return;
     state.settings.master = app.mergeGoogleSettings(state.settings.master, config);
+    app.persistRoleScriptUrl("master", state.settings.master.googleScriptUrl);
     app.writeState(state);
   }
 
@@ -1310,21 +1309,7 @@
   document.getElementById("master-clear-cache").addEventListener("click", clearCacheAndReset);
   document.getElementById("close-settings-modal").addEventListener("click", closeSettings);
   document.getElementById("save-google-settings").addEventListener("click", () => {
-    state.settings.master = app.mergeGoogleSettings(state.settings.master, {
-      googleScriptUrl: googleScriptInput.value,
-      autoSyncEnabled: state.settings.master.autoSyncEnabled !== false
-    });
-    app.writeState(state);
-    stopCrossDeviceSync();
-    autofillMasterSettings().finally(() => {
-      refreshAll();
-      saveState("saveGoogleSetting", { ...state.settings.master });
-      if (state.settings.master.autoSyncEnabled !== false) {
-        syncFromGoogleState({ silent: false });
-        startCrossDeviceSync();
-      }
-      closeSettings();
-    });
+    closeSettings();
   });
   document.getElementById("close-task-detail-modal").addEventListener("click", closeTaskDetailModal);
   document.getElementById("master-login-form").addEventListener("submit", async (event) => {
@@ -1359,6 +1344,16 @@
       sessionToken: result.sessionToken || "",
       sessionUpdatedAt: result.sessionUpdatedAt || ""
     };
+    state.settings.master = app.mergeGoogleSettings(state.settings.master, {
+      googleScriptUrl: result.scriptURL
+    });
+    app.cacheLoginContext("master", {
+      scriptURL: state.settings.master.googleScriptUrl,
+      sessionToken: masterSession.sessionToken,
+      role: "master",
+      name: masterSession.name
+    });
+    app.writeState(state);
     app.saveMasterSession(masterSession);
     refreshAll();
     showMasterApp();
@@ -1372,6 +1367,7 @@
   document.getElementById("master-logout").addEventListener("click", () => {
     masterSession = null;
     app.clearMasterSession();
+    app.clearSharedLoginContext("master");
     stopCrossDeviceSync();
     showMasterLogin();
   });
