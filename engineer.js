@@ -18,6 +18,7 @@
   const appShell = document.getElementById("engineer-app-shell");
   const engineerLoginUser = document.getElementById("engineer-login-user");
   const engineerLoginPassword = document.getElementById("engineer-login-password");
+  const engineerGoogleScriptInput = document.getElementById("engineer-google-script-url");
   const engineerSyncButton = document.getElementById("engineer-sync-button");
 
   function captureActiveFormState() {
@@ -118,7 +119,6 @@
     engineerSession = null;
     activeTaskId = "";
     app.clearEngineerSession();
-    app.clearSharedLoginContext("engineer");
     stopCrossDeviceSync();
     if (message) {
       app.showSyncStatus(message, "error");
@@ -930,6 +930,7 @@
     loginScreen.classList.add("hidden");
     appShell.classList.remove("hidden");
     document.getElementById("engineer-user-eyebrow").textContent = currentEngineer || "Engineer Workspace";
+    engineerGoogleScriptInput.value = state.settings.engineer.googleScriptUrl || "";
     renderSiteList();
   }
 
@@ -978,7 +979,7 @@
 
   function startCrossDeviceSync() {
     stopCrossDeviceSync();
-    if (!app.resolveGoogleScriptUrl(state.settings.engineer, "engineer") || !engineerSession?.userId || !engineerSession?.sessionToken) return;
+    if (!state.settings.engineer.googleScriptUrl || !engineerSession?.userId || !engineerSession?.sessionToken) return;
     sessionTimer = setInterval(() => {
       validateActiveSession({ silent: true });
     }, 2000);
@@ -1003,6 +1004,7 @@
   }
 
   function openSettings() {
+    engineerGoogleScriptInput.value = state.settings.engineer.googleScriptUrl || "";
     document.getElementById("engineer-settings-modal").classList.remove("hidden");
   }
 
@@ -1027,7 +1029,6 @@
     const config = await app.fetchGoogleConfig(state.settings.engineer);
     if (!config) return;
     state.settings.engineer = app.mergeGoogleSettings(state.settings.engineer, config);
-    app.persistRoleScriptUrl("engineer", state.settings.engineer.googleScriptUrl);
     app.writeState(state);
   }
 
@@ -1071,16 +1072,6 @@
       sessionToken: result.sessionToken || "",
       sessionUpdatedAt: result.sessionUpdatedAt || ""
     };
-    state.settings.engineer = app.mergeGoogleSettings(state.settings.engineer, {
-      googleScriptUrl: result.scriptURL
-    });
-    app.cacheLoginContext("engineer", {
-      scriptURL: state.settings.engineer.googleScriptUrl,
-      sessionToken: engineerSession.sessionToken,
-      role: "engineer",
-      name: engineerSession.name
-    });
-    app.writeState(state);
     currentEngineer = engineerSession.name;
     engineerUserId = engineerSession.userId;
     app.saveEngineerSession(engineerSession);
@@ -1105,7 +1096,21 @@
   document.getElementById("engineer-clear-cache").addEventListener("click", clearCacheAndReset);
   document.getElementById("close-engineer-settings-modal").addEventListener("click", closeSettings);
   document.getElementById("engineer-save-google-settings").addEventListener("click", () => {
-    closeSettings();
+    state.settings.engineer = app.mergeGoogleSettings(state.settings.engineer, {
+      googleScriptUrl: engineerGoogleScriptInput.value,
+      autoSyncEnabled: state.settings.engineer.autoSyncEnabled !== false
+    });
+    app.writeState(state);
+    stopCrossDeviceSync();
+    autofillEngineerSettings().finally(() => {
+      refreshState();
+      saveState("saveGoogleSetting", { ...state.settings.engineer });
+      if (state.settings.engineer.autoSyncEnabled !== false) {
+        syncFromGoogleState({ silent: false });
+        startCrossDeviceSync();
+      }
+      closeSettings();
+    });
   });
 
   window.addEventListener("storage", () => {

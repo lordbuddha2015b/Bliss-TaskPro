@@ -6,7 +6,7 @@
   <title>Bliss TaskPro | Master App</title>
   <link rel="icon" type="image/png" href="./New Logo.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="./styles.css?v=20260407-loginfix">
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body data-app="master">
   <div class="page-watermark" aria-hidden="true"></div>
@@ -153,12 +153,12 @@
     <div class="modal-card">
       <div class="modal-header"><h4>Master Settings</h4><button type="button" id="close-settings-modal" class="secondary-button">Close</button></div>
       <div class="form-grid">
-        <div class="full-span fine-print">Apps Script URL is now fetched automatically after successful login.</div>
+        <label class="full-span"><span>Apps Script URL</span><input id="google-script-url" type="url" placeholder="Paste Google Apps Script Web App URL"></label>
         <div class="full-span action-row">
           <button id="master-clear-cache" class="secondary-button" type="button">Clear Cache</button>
         </div>
       </div>
-      <div class="modal-footer"><div class="fine-print">These settings are for the Master app only.</div><button id="save-google-settings" class="primary-button" type="button">Done</button></div>
+      <div class="modal-footer"><div class="fine-print">These settings are for the Master app only.</div><button id="save-google-settings" class="primary-button" type="button">Save Settings</button></div>
     </div>
   </div>
 
@@ -171,7 +171,7 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="./shared.js?v=20260407-loginfix"></script>
-  <script src="./master.js?v=20260407-loginfix"></script>
+  <script src="./shared.js"></script>
+  <script src="./master.js"></script>
 </body>
 </html>

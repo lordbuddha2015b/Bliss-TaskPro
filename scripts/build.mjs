@@ -22,8 +22,7 @@ const filesToCopy = [
 
 const dirsToCopy = [
   "Images",
-  "json",
-  "api"
+  "json"
 ];
 
 async function copyItem(relativePath) {

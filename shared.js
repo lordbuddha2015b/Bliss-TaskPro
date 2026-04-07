@@ -4,17 +4,8 @@
   const ENGINEER_SETTINGS_KEY = "bliss-taskpro-engineer-settings";
   const MASTER_SESSION_KEY = "bliss-taskpro-master-session";
   const ENGINEER_SESSION_KEY = "bliss-taskpro-engineer-session";
-  const SHARED_SCRIPT_URL_KEY = "scriptURL";
-  const SHARED_SESSION_TOKEN_KEY = "sessionToken";
-  const SHARED_ROLE_KEY = "userRole";
-  const SHARED_DISPLAY_NAME_KEY = "displayName";
-  const MASTER_SCRIPT_URL_KEY = "bliss-taskpro-master-script-url";
-  const ENGINEER_SCRIPT_URL_KEY = "bliss-taskpro-engineer-script-url";
-  const APPS_SCRIPT_PROXY_URL = "/api/apps-script-proxy.php";
-  const DEFAULT_LOGIN_API = {
-    master: "https://script.google.com/macros/s/AKfycbxdVLShug748qRYTRjDsg3INyGLGXAnKeqPnNA2AHzjoSbdu1YABRhwlUN47JXe46yU/exec",
-    engineer: "https://script.google.com/macros/s/AKfycbwFAw5fOPSCQ3w1sX4hfc4utmuSlDTIy_6hgC1DCbhkJX6ZgKSakGV6YIIwFmsJmks/exec"
-  };
+  const CREDENTIAL_SHEET_ID = "1RuV_gocgi-DwFpN8uQqwE-MWiwHvXBg1-Ly0gL-ZbEk";
+  const ENGINEER_CREDENTIAL_SHEET_NAME = "Engineer_Credential";
 
   const defaults = {
     options: {
@@ -149,77 +140,13 @@
     if (appName === "master") {
       state.settings.master.googleScriptUrl = "";
       localStorage.removeItem(MASTER_SETTINGS_KEY);
-      localStorage.removeItem(MASTER_SCRIPT_URL_KEY);
       sessionStorage.removeItem(MASTER_SESSION_KEY);
     } else {
       state.settings.engineer.googleScriptUrl = "";
       localStorage.removeItem(ENGINEER_SETTINGS_KEY);
-      localStorage.removeItem(ENGINEER_SCRIPT_URL_KEY);
       sessionStorage.removeItem(ENGINEER_SESSION_KEY);
     }
-    clearSharedLoginContext(appName);
     writeState(state);
-  }
-
-  function getScriptStorageKey(role) {
-    return role === "engineer" ? ENGINEER_SCRIPT_URL_KEY : MASTER_SCRIPT_URL_KEY;
-  }
-
-  function readStoredScriptUrl(role) {
-    const defaultLoginApi = sanitizeGoogleValue(DEFAULT_LOGIN_API[role] || DEFAULT_LOGIN_API.master);
-    return sanitizeGoogleValue(
-      localStorage.getItem(getScriptStorageKey(role))
-      || localStorage.getItem(SHARED_SCRIPT_URL_KEY)
-      || defaultLoginApi
-    );
-  }
-
-  function persistRoleScriptUrl(role, scriptUrl) {
-    const sanitized = sanitizeGoogleValue(scriptUrl);
-    if (!sanitized) return "";
-    localStorage.setItem(getScriptStorageKey(role), sanitized);
-    localStorage.setItem(SHARED_SCRIPT_URL_KEY, sanitized);
-    return sanitized;
-  }
-
-  function resolveGoogleScriptUrl(settings, role) {
-    return sanitizeGoogleValue(settings?.googleScriptUrl) || readStoredScriptUrl(role);
-  }
-
-  async function proxyAppsScriptRequest({ scriptUrl, method = "GET", query = {}, body = null }) {
-    const response = await fetch(APPS_SCRIPT_PROXY_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        scriptUrl,
-        method,
-        query,
-        body
-      })
-    });
-    return await response.json();
-  }
-
-  function clearSharedLoginContext(role) {
-    if (!role || localStorage.getItem(SHARED_ROLE_KEY) === role) {
-      localStorage.removeItem(SHARED_SCRIPT_URL_KEY);
-      localStorage.removeItem(SHARED_SESSION_TOKEN_KEY);
-      localStorage.removeItem(SHARED_ROLE_KEY);
-      localStorage.removeItem(SHARED_DISPLAY_NAME_KEY);
-    }
-  }
-
-  function cacheLoginContext(role, response) {
-    const scriptUrl = persistRoleScriptUrl(role, response?.scriptURL || response?.user?.scriptURL || "");
-    if (scriptUrl) {
-      localStorage.setItem(SHARED_SCRIPT_URL_KEY, scriptUrl);
-    }
-    if (response?.sessionToken) {
-      localStorage.setItem(SHARED_SESSION_TOKEN_KEY, response.sessionToken);
-    }
-    localStorage.setItem(SHARED_ROLE_KEY, role);
-    localStorage.setItem(SHARED_DISPLAY_NAME_KEY, response?.name || response?.user?.name || "");
-    return scriptUrl;
   }
 
   function uid(prefix) {
@@ -335,14 +262,15 @@
   async function postGoogleSync(state, payload) {
     const source = payload.source === "engineer" ? "engineer" : "master";
     const activeSettings = state.settings?.[source] || {};
-    const endpoint = resolveGoogleScriptUrl(activeSettings, source);
+    const endpoint = activeSettings.googleScriptUrl;
     if (!endpoint) return { skipped: true };
     try {
-      const data = await proxyAppsScriptRequest({
-        scriptUrl: endpoint,
+      const response = await fetch(endpoint, {
         method: "POST",
-        body: { ...payload, state: sanitizeStateForStorage(state), activeSettings }
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ ...payload, state: sanitizeStateForStorage(state), activeSettings })
       });
+      const data = await response.json();
       return data?.ok === false ? { skipped: false, error: new Error(data.message || data.error || "Sync failed"), sessionExpired: !!data.sessionExpired } : { skipped: false, data };
     } catch (error) {
       return { skipped: false, error };
@@ -356,126 +284,128 @@
   }
 
   async function savePdfToDrive(settings, session, payload) {
-    const endpoint = resolveGoogleScriptUrl(settings, session?.role || "master");
-    if (!endpoint) return { ok: false, message: "Apps Script endpoint is not available." };
+    const endpoint = settings?.googleScriptUrl;
+    if (!endpoint) return { ok: false, message: "Apps Script URL is required in settings." };
     try {
-      return await proxyAppsScriptRequest({
-        scriptUrl: endpoint,
+      const response = await fetch(endpoint, {
         method: "POST",
-        body: {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
           action: "savePdfToDrive",
           source: session?.role || "master",
           userId: session?.userId || "",
           sessionToken: session?.sessionToken || "",
           payload
-        }
+        })
       });
+      return await response.json();
     } catch (error) {
       return { ok: false, message: error.message || "Unable to save PDF to Drive." };
     }
   }
 
   async function deleteDriveFile(settings, session, payload) {
-    const endpoint = resolveGoogleScriptUrl(settings, session?.role || "engineer");
-    if (!endpoint) return { ok: false, message: "Apps Script endpoint is not available." };
+    const endpoint = settings?.googleScriptUrl;
+    if (!endpoint) return { ok: false, message: "Apps Script URL is required in settings." };
     try {
-      return await proxyAppsScriptRequest({
-        scriptUrl: endpoint,
+      const response = await fetch(endpoint, {
         method: "POST",
-        body: {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
           action: "deleteDriveFile",
           source: session?.role || "engineer",
           userId: session?.userId || "",
           sessionToken: session?.sessionToken || "",
           payload
-        }
+        })
       });
+      return await response.json();
     } catch (error) {
       return { ok: false, message: error.message || "Unable to delete Drive file." };
     }
   }
 
   async function saveReportFiles(settings, session, payload) {
-    const endpoint = resolveGoogleScriptUrl(settings, session?.role || "master");
-    if (!endpoint) return { ok: false, message: "Apps Script endpoint is not available." };
+    const endpoint = settings?.googleScriptUrl;
+    if (!endpoint) return { ok: false, message: "Apps Script URL is required in settings." };
     try {
-      return await proxyAppsScriptRequest({
-        scriptUrl: endpoint,
+      const response = await fetch(endpoint, {
         method: "POST",
-        body: {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
           action: "saveReportFiles",
           source: session?.role || "master",
           userId: session?.userId || "",
           sessionToken: session?.sessionToken || "",
           payload
-        }
+        })
       });
+      return await response.json();
     } catch (error) {
       return { ok: false, message: error.message || "Unable to save report files." };
     }
   }
 
   async function fetchGoogleTask(settings, siteId, session) {
-    const endpoint = resolveGoogleScriptUrl(settings, session?.role || "");
+    const endpoint = settings.googleScriptUrl;
     if (!endpoint || !siteId) return null;
     try {
-      return await proxyAppsScriptRequest({
-        scriptUrl: endpoint,
-        method: "GET",
-        query: {
-          action: "getTask",
-          siteId,
-          source: session?.role || "",
-          userId: session?.userId || "",
-          sessionToken: session?.sessionToken || ""
+      const url = new URL(endpoint);
+      url.searchParams.set("action", "getTask");
+      url.searchParams.set("siteId", siteId);
+      url.searchParams.set("source", session?.role || "");
+      url.searchParams.set("userId", session?.userId || "");
+      url.searchParams.set("sessionToken", session?.sessionToken || "");
+      const response = await fetch(url.toString(), {
+        headers: {
+          Accept: "application/json"
         }
       });
+      return await response.json();
     } catch (error) {
       return null;
     }
   }
 
   async function fetchGoogleState(settings, session) {
-    const endpoint = resolveGoogleScriptUrl(settings, session?.role || "");
+    const endpoint = settings.googleScriptUrl;
     if (!endpoint) return null;
     try {
-      return await proxyAppsScriptRequest({
-        scriptUrl: endpoint,
-        method: "GET",
-        query: {
-          action: "getState",
-          source: session?.role || "",
-          userId: session?.userId || "",
-          sessionToken: session?.sessionToken || ""
+      const url = new URL(endpoint);
+      url.searchParams.set("action", "getState");
+      url.searchParams.set("source", session?.role || "");
+      url.searchParams.set("userId", session?.userId || "");
+      url.searchParams.set("sessionToken", session?.sessionToken || "");
+      const response = await fetch(url.toString(), {
+        headers: {
+          Accept: "application/json"
         }
       });
+      const data = await response.json();
+      return data || null;
     } catch (error) {
       return null;
     }
   }
 
   async function loginWithGoogle(settings, role, userId, password) {
-    const endpoint = sanitizeGoogleValue(DEFAULT_LOGIN_API[role] || DEFAULT_LOGIN_API.master);
+    const endpoint = settings.googleScriptUrl;
     if (!endpoint) {
-      return { ok: false, message: "Default login API is not configured." };
+      return { ok: false, message: "Apps Script URL is required in settings." };
     }
     try {
-      const data = await proxyAppsScriptRequest({
-        scriptUrl: endpoint,
+      const response = await fetch(endpoint, {
         method: "POST",
-        query: { action: "login" },
-        body: {
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
           action: "login",
           source: role,
           activeSettings: settings,
           payload: { role, userId, password }
-        }
+        })
       });
-      if (data?.ok) {
-        data.scriptURL = sanitizeGoogleValue(data.scriptURL) || endpoint;
-        data.status = data.status || "success";
-        return data;
-      }
+      const data = await response.json();
+      if (data?.ok) return data;
       return {
         ok: false,
         message: data?.message || data?.error || "Login failed.",
@@ -487,16 +417,17 @@
   }
 
   async function fetchGoogleConfig(settings) {
-    const endpoint = resolveGoogleScriptUrl(settings, document.body?.dataset?.app === "engineer" ? "engineer" : "master");
+    const endpoint = settings.googleScriptUrl;
     if (!endpoint) return null;
     try {
-      const data = await proxyAppsScriptRequest({
-        scriptUrl: endpoint,
-        method: "GET"
+      const response = await fetch(endpoint, {
+        headers: {
+          Accept: "application/json"
+        }
       });
+      const data = await response.json();
       if (!data?.ok) return null;
       return {
-        googleScriptUrl: sanitizeGoogleValue(data.scriptURL) || endpoint,
         siteRootFolderId: sanitizeGoogleValue(data.siteRootFolderId)
       };
     } catch (error) {
@@ -520,23 +451,59 @@
     };
   }
 
+  function parseGoogleVisualizationJson(text) {
+    const raw = String(text || "").trim();
+    if (!raw) return null;
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start === -1 || end === -1 || end <= start) return null;
+    try {
+      return JSON.parse(raw.slice(start, end + 1));
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async function fetchEngineerOptionsFromCredentialSheet() {
+    const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(CREDENTIAL_SHEET_ID)}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(ENGINEER_CREDENTIAL_SHEET_NAME)}`;
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Accept: "text/plain"
+        }
+      });
+      const text = await response.text();
+      const data = parseGoogleVisualizationJson(text);
+      const cols = data?.table?.cols || [];
+      const rows = data?.table?.rows || [];
+      const displayNameIndex = cols.findIndex((col) => String(col?.label || "").trim().toLowerCase() === "display name");
+      if (displayNameIndex === -1) return [];
+      const seen = new Set();
+      return rows
+        .map((row) => row?.c?.[displayNameIndex]?.v)
+        .map((value) => String(value || "").trim())
+        .filter((value) => {
+          if (!value || seen.has(value)) return false;
+          seen.add(value);
+          return true;
+        });
+    } catch (error) {
+      return [];
+    }
+  }
+
   function normalizeSettings(input, fallback) {
     const base = JSON.parse(JSON.stringify(fallback));
-    if (!input) {
-      return {
-        master: { ...base.master, googleScriptUrl: readStoredScriptUrl("master") },
-        engineer: { ...base.engineer, googleScriptUrl: readStoredScriptUrl("engineer") }
-      };
-    }
+    if (!input) return base;
     if (input.master || input.engineer) {
       return {
-        master: { ...base.master, ...(input.master || {}), googleScriptUrl: sanitizeGoogleValue(input.master?.googleScriptUrl) || readStoredScriptUrl("master") },
-        engineer: { ...base.engineer, ...(input.engineer || {}), googleScriptUrl: sanitizeGoogleValue(input.engineer?.googleScriptUrl) || readStoredScriptUrl("engineer") }
+        master: { ...base.master, ...(input.master || {}) },
+        engineer: { ...base.engineer, ...(input.engineer || {}) }
       };
     }
     return {
-      master: { ...base.master, ...(input || {}), googleScriptUrl: sanitizeGoogleValue(input?.googleScriptUrl) || readStoredScriptUrl("master") },
-      engineer: { ...base.engineer, googleScriptUrl: readStoredScriptUrl("engineer") }
+      master: { ...base.master, ...(input || {}) },
+      engineer: { ...base.engineer }
     };
   }
 
@@ -558,19 +525,20 @@
   }
 
   async function validateGoogleSession(settings, session) {
-    const endpoint = resolveGoogleScriptUrl(settings, session?.role || "");
+    const endpoint = settings.googleScriptUrl;
     if (!endpoint || !session?.userId || !session?.sessionToken) return { ok: false, sessionExpired: true };
     try {
-      return await proxyAppsScriptRequest({
-        scriptUrl: endpoint,
-        method: "GET",
-        query: {
-          action: "validateSession",
-          role: session.role || "",
-          userId: session.userId || "",
-          sessionToken: session.sessionToken || ""
+      const url = new URL(endpoint);
+      url.searchParams.set("action", "validateSession");
+      url.searchParams.set("role", session.role || "");
+      url.searchParams.set("userId", session.userId || "");
+      url.searchParams.set("sessionToken", session.sessionToken || "");
+      const response = await fetch(url.toString(), {
+        headers: {
+          Accept: "application/json"
         }
       });
+      return await response.json();
     } catch (error) {
       return { ok: false, message: "Unable to validate session." };
     }
@@ -632,8 +600,8 @@
     if (/Credential sheet not found/i.test(message) || /Credential sheet is empty/i.test(message)) {
       return `${message} Check your Google Sheet tabs and login rows.`;
     }
-    if (/Default login API is not configured/i.test(message)) {
-      return "Default login API is not configured.";
+    if (/Apps Script URL is required/i.test(message)) {
+      return `${message} Open Settings and save the deployed Apps Script Web App URL first.`;
     }
     return message;
   }
@@ -685,14 +653,11 @@
     reverseGeocodeDistrict,
     loginWithGoogle,
     fetchGoogleConfig,
+    fetchEngineerOptionsFromCredentialSheet,
     formatLoginFailure,
     validateGoogleSession,
     mergeGoogleSettings,
     mergeRemoteOptions,
-    resolveGoogleScriptUrl,
-    persistRoleScriptUrl,
-    cacheLoginContext,
-    clearSharedLoginContext,
     showSyncStatus,
     hideSyncStatus,
     saveMasterSession,

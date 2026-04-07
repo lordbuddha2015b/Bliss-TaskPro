@@ -112,8 +112,6 @@ The build copies:
 - Century Gothic based UI styling across Master and Engineer pages
 - Master and Engineer task tables with serial numbering and status actions at the end
 - Manual latitude and longitude entry in Master task assignment with automatic district lookup
-- Frontend now routes task sync, task reads, uploads, report saves, and session validation through Google Apps Script API calls
-- Login now stores the returned Apps Script URL and session token automatically, so users no longer need to paste the script URL manually after successful login
 
 ## Workflow
 
@@ -203,10 +201,6 @@ Each Site ID gets its own Google Sheet named `SiteID_DataSheet`.
 ## Notes
 
 - UI theme, login system, manual Site ID entry, and status names remain unchanged.
-- Login now uses a bootstrap Apps Script endpoint first, then switches to the Apps Script URL returned from the credential row in column `H`.
-- Set the bootstrap Apps Script URL once in [shared.js](E:\Bob_Coding\Bliss TaskPro\Bliss-TaskPro\shared.js) via `BOOTSTRAP_SCRIPT_URL`, then each successful login will keep using the returned `scriptURL` automatically.
-- The credential sheet now also supports an `Apps Script URL` column, and successful login responses include `role`, `name`, `scriptURL`, and `sessionToken`.
-- Master engineer dropdown refresh now comes from the Apps Script `getState` response, which reads the `Engineer_Credential` sheet server-side and merges the names into `state.options.engineers`.
 - Sync now preserves local Master drafts until they are converted into tasks.
 - Auto Sync now only runs background timers when the saved toggle is ON.
 - With Auto Sync OFF, refresh, manual sync, and task-save actions still update data, but no background interval runs.
