@@ -10,7 +10,10 @@
   const SHARED_DISPLAY_NAME_KEY = "displayName";
   const MASTER_SCRIPT_URL_KEY = "bliss-taskpro-master-script-url";
   const ENGINEER_SCRIPT_URL_KEY = "bliss-taskpro-engineer-script-url";
-  const DEFAULT_LOGIN_API = "https://script.google.com/macros/s/AKfycbw07_qISib94zR0xaleVDpdoQnyxSTU8DzKJH8Fibw/exec";
+  const DEFAULT_LOGIN_API = {
+    master: "https://script.google.com/macros/s/AKfycbxJzYz9p3v0dKueOf2tusTQaVIsAFnewC-w3ODMBXo8ZdWLKTltcTQI8uoJED4ZbTZx/exec",
+    engineer: "https://script.google.com/macros/s/AKfycbwo7_qlSib94zR0xaIeVDpdoQnyxSTU8DzKJH8Fibwc1UitjcyJcGjInlwfexsJcXRf/exec"
+  };
 
   const defaults = {
     options: {
@@ -162,10 +165,11 @@
   }
 
   function readStoredScriptUrl(role) {
+    const defaultLoginApi = sanitizeGoogleValue(DEFAULT_LOGIN_API[role] || DEFAULT_LOGIN_API.master);
     return sanitizeGoogleValue(
       localStorage.getItem(getScriptStorageKey(role))
       || localStorage.getItem(SHARED_SCRIPT_URL_KEY)
-      || DEFAULT_LOGIN_API
+      || defaultLoginApi
     );
   }
 
@@ -443,7 +447,7 @@
   }
 
   async function loginWithGoogle(settings, role, userId, password) {
-    const endpoint = sanitizeGoogleValue(DEFAULT_LOGIN_API);
+    const endpoint = sanitizeGoogleValue(DEFAULT_LOGIN_API[role] || DEFAULT_LOGIN_API.master);
     if (!endpoint) {
       return { ok: false, message: "Default login API is not configured." };
     }
