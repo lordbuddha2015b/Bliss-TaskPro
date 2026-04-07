@@ -26,6 +26,33 @@ This repo does not use a framework build today. A packaging build is included fo
 2. Run `npm run build`
 3. Upload the contents of [public_html](E:\Bob_Coding\Bliss TaskPro\Bliss-TaskPro\dist\public_html) to Hostinger `public_html`
 
+### GitHub To Hostinger Deployment
+
+A GitHub Actions workflow is included at:
+
+- [deploy-hostinger.yml](E:\Bob_Coding\Bliss TaskPro\Bliss-TaskPro\.github\workflows\deploy-hostinger.yml)
+
+It will:
+
+1. run on push to `main`
+2. install dependencies
+3. build the Hostinger package
+4. upload `dist/public_html` to Hostinger `/public_html/`
+
+Add these GitHub repository secrets before using it:
+
+- `HOSTINGER_FTP_SERVER`
+- `HOSTINGER_FTP_USERNAME`
+- `HOSTINGER_FTP_PASSWORD`
+- `HOSTINGER_FTP_PORT`
+
+Typical Hostinger values:
+
+- `HOSTINGER_FTP_SERVER`: your Hostinger FTP host
+- `HOSTINGER_FTP_USERNAME`: your FTP username
+- `HOSTINGER_FTP_PASSWORD`: your FTP password
+- `HOSTINGER_FTP_PORT`: usually `21`
+
 The build copies:
 
 - `index.html`
