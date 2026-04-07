@@ -448,7 +448,9 @@
       return { ok: false, message: "Apps Script bootstrap URL is not configured." };
     }
     try {
-      const response = await fetch(endpoint, {
+      const url = new URL(endpoint);
+      url.searchParams.set("action", "login");
+      const response = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({
@@ -622,9 +624,6 @@
     const message = String(result?.message || result?.error || "Login failed.").trim();
     if (/Credential sheet not found/i.test(message) || /Credential sheet is empty/i.test(message)) {
       return `${message} Check your Google Sheet tabs and login rows.`;
-    }
-    if (/Apps Script URL is required/i.test(message)) {
-      return `${message} Login bootstrap is missing. Configure the shared Apps Script endpoint once in code.`;
     }
     if (/Apps Script bootstrap URL is not configured/i.test(message)) {
       return "Apps Script bootstrap URL is not configured.";
